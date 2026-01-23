@@ -8,6 +8,7 @@ export default defineSchema({
     passwordHash: v.string(),
     displayName: v.string(),
     publicKey: v.string(), // X25519 public key (Base64)
+    encryptedPrivateKey: v.optional(v.string()), // Encrypted with password (Base64)
     createdAt: v.number(),
   })
     .index('by_email', ['email']),

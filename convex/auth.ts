@@ -24,6 +24,7 @@ export const register = mutation({
     password: v.string(),
     displayName: v.string(),
     publicKey: v.string(),
+    encryptedPrivateKey: v.optional(v.string()), // Accept encrypted private key
   },
   handler: async (ctx, args) => {
     // Check if email exists
@@ -56,6 +57,7 @@ export const register = mutation({
       passwordHash,
       displayName: args.displayName,
       publicKey: args.publicKey,
+      encryptedPrivateKey: args.encryptedPrivateKey,
       createdAt: Date.now(),
     });
 
@@ -107,7 +109,12 @@ export const login = mutation({
       createdAt: Date.now(),
     });
 
-    return { userId: user._id, token };
+    return {
+      userId: user._id,
+      token,
+      encryptedPrivateKey: user.encryptedPrivateKey,
+      publicKey: user.publicKey
+    };
   },
 });
 
@@ -155,6 +162,7 @@ export const updatePublicKey = mutation({
   args: {
     token: v.string(),
     publicKey: v.string(),
+    encryptedPrivateKey: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const session = await ctx.db
@@ -168,6 +176,7 @@ export const updatePublicKey = mutation({
 
     await ctx.db.patch(session.userId, {
       publicKey: args.publicKey,
+      encryptedPrivateKey: args.encryptedPrivateKey,
     });
 
     return { success: true };

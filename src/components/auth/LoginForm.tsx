@@ -26,7 +26,7 @@ export function LoginForm({ onSwitchToRegister }: LoginFormProps) {
 
     try {
       // Add timeout protection (30 seconds)
-      const timeoutPromise = new Promise((_, reject) => 
+      const timeoutPromise = new Promise((_, reject) =>
         setTimeout(() => reject(new Error('Request timeout. Silakan coba lagi.')), 30000)
       );
 
@@ -40,9 +40,10 @@ export function LoginForm({ onSwitchToRegister }: LoginFormProps) {
         setIsLoading(false);
       }
       // If success, isLoading will be reset by app.tsx when redirecting
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Login error:', error);
-      setError(error.message || 'Login gagal. Silakan coba lagi.');
+      const message = error instanceof Error ? error.message : 'Login gagal. Silakan coba lagi.';
+      setError(message);
       setIsLoading(false);
     }
   };

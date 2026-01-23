@@ -189,7 +189,7 @@ export const markRead = mutation({
     }
 
     // Update delivered and read
-    const updates: Record<string, any> = {};
+    const updates: { deliveredAt?: number; readAt?: number } = {};
     if (!message.deliveredAt) {
       updates.deliveredAt = Date.now();
     }

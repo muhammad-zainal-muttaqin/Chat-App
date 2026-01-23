@@ -8,6 +8,8 @@ import {
   loadKeyPair,
   clearKeyPair,
   KeyPair,
+  encryptPrivateKeyWithPassword,
+  decryptPrivateKeyWithPassword,
 } from '../lib/crypto';
 
 interface AuthContextType {
@@ -32,6 +34,7 @@ export function AuthProvider({ children }: { children: preact.ComponentChildren 
   const loginMutation = useMutation(api.auth.login);
   const registerMutation = useMutation(api.auth.register);
   const logoutMutation = useMutation(api.auth.logout);
+  const syncKeysMutation = useMutation(api.auth.updatePublicKey);
 
   // Load token and keys on mount
   useEffect(() => {
@@ -54,11 +57,15 @@ export function AuthProvider({ children }: { children: preact.ComponentChildren 
         // Generate encryption keys first
         const newKeyPair = generateKeyPair();
 
+        // Encrypt private key with password
+        const encryptedPrivateKey = await encryptPrivateKeyWithPassword(newKeyPair.privateKey, password);
+
         const result = await registerMutation({
           email,
           password,
           displayName,
           publicKey: newKeyPair.publicKey,
+          encryptedPrivateKey,
         });
 
         // Store token and keys
@@ -69,9 +76,10 @@ export function AuthProvider({ children }: { children: preact.ComponentChildren 
         setKeyPair(newKeyPair);
 
         return { success: true };
-      } catch (error: any) {
+      } catch (error: unknown) {
         console.error('Registration error:', error);
-        return { success: false, error: error.message || 'Registrasi gagal. Silakan coba lagi.' };
+        const message = error instanceof Error ? error.message : 'Registrasi gagal. Silakan coba lagi.';
+        return { success: false, error: message };
       }
     },
     [registerMutation]
@@ -82,15 +90,62 @@ export function AuthProvider({ children }: { children: preact.ComponentChildren 
       try {
         const result = await loginMutation({ email, password });
 
-        // Load existing keys
-        let currentKeyPair = loadKeyPair();
+        // Load existing keys - type the response properly
+        const authResponse = result as {
+          userId: string;
+          token: string;
+          encryptedPrivateKey?: string;
+          publicKey?: string;
+        };
+        let currentKeyPair: KeyPair | null = null;
 
-        // If no keys exist (new device), generate new ones automatically
+        // 1. Try to restore keys from server (Preferred)
+        if (authResponse.encryptedPrivateKey && authResponse.publicKey) {
+          try {
+            console.log('Restoring encryption keys from server...');
+            const privateKey = await decryptPrivateKeyWithPassword(
+              authResponse.encryptedPrivateKey,
+              password
+            );
+            currentKeyPair = {
+              publicKey: authResponse.publicKey,
+              privateKey,
+            };
+            storeKeyPair(currentKeyPair);
+          } catch (e) {
+            console.error('Failed to restore keys from server:', e);
+          }
+        }
+
+        // 2. If valid keys not found from server, check local storage
+        if (!currentKeyPair) {
+          currentKeyPair = loadKeyPair();
+        }
+
+        // 3. If no keys exist (new device and no backup), generate new ones automatically
         // NOTE: This means old messages will be unreadable, but allows immediate use on new devices
         if (!currentKeyPair) {
-          console.log('Generating new encryption keys for new session...');
+          console.warn('Generating new encryption keys for new session (old messages will be unreadable)...');
           currentKeyPair = generateKeyPair();
           storeKeyPair(currentKeyPair);
+        }
+
+        // 4. Sync keys to server if we have them but server doesn't (or just to be safe)
+        if (currentKeyPair) {
+          try {
+            // Only sync if server didn't return keys OR if we generated new ones
+            if (!authResponse.encryptedPrivateKey || !authResponse.publicKey) {
+              console.log('Syncing keys to server for future backup...');
+              const encryptedPrivateKey = await encryptPrivateKeyWithPassword(currentKeyPair.privateKey, password);
+              await syncKeysMutation({
+                token: result.token,
+                publicKey: currentKeyPair.publicKey,
+                encryptedPrivateKey
+              });
+            }
+          } catch (e) {
+            console.error("Failed to sync keys:", e);
+          }
         }
 
         // Store token
@@ -100,12 +155,13 @@ export function AuthProvider({ children }: { children: preact.ComponentChildren 
         setKeyPair(currentKeyPair);
 
         return { success: true };
-      } catch (error: any) {
+      } catch (error: unknown) {
         console.error('Login error:', error);
-        return { success: false, error: error.message || 'Login gagal. Periksa email dan password Anda.' };
+        const message = error instanceof Error ? error.message : 'Login gagal. Periksa email dan password Anda.';
+        return { success: false, error: message };
       }
     },
-    [loginMutation]
+    [loginMutation, syncKeysMutation]
   );
 
   const logout = useCallback(async () => {
