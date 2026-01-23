@@ -10,7 +10,8 @@
       "Bash(bun run build)",
       "Bash(bun add:*)",
       "Bash(bun remove:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(git commit:*)"
     ]
   }
 }

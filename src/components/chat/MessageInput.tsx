@@ -82,7 +82,7 @@ export function MessageInput({ conversationId, recipientPublicKey, token, onMess
   return (
     <div class="border-t border-dark-200/50 dark:border-white/5 bg-white/50 dark:bg-dark-950/50 backdrop-blur-xl relative z-30">
       <div class="max-w-4xl mx-auto px-4 lg:px-6 py-4 lg:py-5">
-        <form onSubmit={handleSubmit} class="flex items-center gap-3 lg:gap-4">
+        <form onSubmit={handleSubmit} class="flex items-end gap-3 lg:gap-4">
           <div class="flex-1 relative group">
             <textarea
               value={message}

@@ -124,6 +124,7 @@ export function ChatLayout({ user }: ChatLayoutProps) {
                 token={token}
                 selectedId={selectedConversationId}
                 onSelect={handleSelectConversation}
+                currentUserId={user._id}
               />
             )}
           </div>

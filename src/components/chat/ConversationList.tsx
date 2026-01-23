@@ -6,9 +6,10 @@ interface ConversationListProps {
   token: string;
   selectedId: Id<'conversations'> | null;
   onSelect: (id: Id<'conversations'>) => void;
+  currentUserId: Id<'users'>;
 }
 
-export function ConversationList({ token, selectedId, onSelect }: ConversationListProps) {
+export function ConversationList({ token, selectedId, onSelect, currentUserId }: ConversationListProps) {
   const conversations = useQuery(api.conversations.list, { token });
 
   if (conversations === undefined) {
@@ -93,7 +94,9 @@ export function ConversationList({ token, selectedId, onSelect }: ConversationLi
                   <span class={`text-sm truncate font-medium ${isActive ? 'text-primary-600/90 dark:text-primary-300/90' : 'text-gray-500 dark:text-gray-400'}`}>
                     {conv.lastMessage?.isDeleted
                       ? 'Message deleted'
-                      : 'Encrypted message'}
+                      : conv.lastMessage?.senderId === currentUserId
+                      ? 'You sent a message'
+                      : `${conv.otherUser?.displayName || 'Someone'} sent a message`}
                   </span>
 
                   {conv.unreadCount > 0 && (
