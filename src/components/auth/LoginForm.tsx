@@ -1,4 +1,4 @@
-import { useState } from 'preact/hooks';
+import { useState, useEffect } from 'preact/hooks';
 import { useAuth } from '../../contexts/AuthContext';
 
 interface LoginFormProps {
@@ -12,18 +12,39 @@ export function LoginForm({ onSwitchToRegister }: LoginFormProps) {
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      setIsLoading(false);
+    };
+  }, []);
+
   const handleSubmit = async (e: Event) => {
     e.preventDefault();
     setError(null);
     setIsLoading(true);
 
-    const result = await login(email, password);
+    try {
+      // Add timeout protection (30 seconds)
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Request timeout. Silakan coba lagi.')), 30000)
+      );
 
-    if (!result.success) {
-      setError(result.error || 'Login failed');
+      const result = await Promise.race([
+        login(email, password),
+        timeoutPromise
+      ]) as { success: boolean; error?: string };
+
+      if (!result.success) {
+        setError(result.error || 'Login gagal');
+        setIsLoading(false);
+      }
+      // If success, isLoading will be reset by app.tsx when redirecting
+    } catch (error: any) {
+      console.error('Login error:', error);
+      setError(error.message || 'Login gagal. Silakan coba lagi.');
+      setIsLoading(false);
     }
-
-    setIsLoading(false);
   };
 
   return (

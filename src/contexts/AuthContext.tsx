@@ -52,7 +52,7 @@ export function AuthProvider({ children }: { children: preact.ComponentChildren 
   const register = useCallback(
     async (email: string, password: string, displayName: string) => {
       try {
-        // Generate encryption keys
+        // Generate encryption keys first
         const newKeyPair = generateKeyPair();
 
         const result = await registerMutation({
@@ -71,7 +71,8 @@ export function AuthProvider({ children }: { children: preact.ComponentChildren 
 
         return { success: true };
       } catch (error: any) {
-        return { success: false, error: error.message || 'Registration failed' };
+        console.error('Registration error:', error);
+        return { success: false, error: error.message || 'Registrasi gagal. Silakan coba lagi.' };
       }
     },
     [registerMutation]

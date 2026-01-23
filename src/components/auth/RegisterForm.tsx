@@ -1,4 +1,4 @@
-import { useState } from 'preact/hooks';
+import { useState, useEffect } from 'preact/hooks';
 import { useAuth } from '../../contexts/AuthContext';
 
 interface RegisterFormProps {
@@ -13,6 +13,13 @@ export function RegisterForm({ onSwitchToLogin }: RegisterFormProps) {
   const [displayName, setDisplayName] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      setIsLoading(false);
+    };
+  }, []);
 
   const handleSubmit = async (e: Event) => {
     e.preventDefault();
@@ -36,13 +43,27 @@ export function RegisterForm({ onSwitchToLogin }: RegisterFormProps) {
 
     setIsLoading(true);
 
-    const result = await register(email, password, displayName);
+    try {
+      // Add timeout protection (30 seconds)
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Request timeout. Silakan coba lagi.')), 30000)
+      );
 
-    if (!result.success) {
-      setError(result.error || 'Registration failed');
+      const result = await Promise.race([
+        register(email, password, displayName),
+        timeoutPromise
+      ]) as { success: boolean; error?: string };
+
+      if (!result.success) {
+        setError(result.error || 'Registrasi gagal');
+        setIsLoading(false);
+      }
+      // If success, isLoading will be reset by app.tsx when redirecting
+    } catch (error: any) {
+      console.error('Registration error:', error);
+      setError(error.message || 'Registrasi gagal. Silakan coba lagi.');
+      setIsLoading(false);
     }
-
-    setIsLoading(false);
   };
 
   return (
