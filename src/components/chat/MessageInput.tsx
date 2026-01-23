@@ -83,18 +83,18 @@ export function MessageInput({ conversationId, recipientPublicKey, token, onMess
     <div class="border-t border-dark-200/50 dark:border-white/5 bg-white/50 dark:bg-dark-950/50 backdrop-blur-xl relative z-30">
       <div class="max-w-4xl mx-auto px-4 lg:px-6 py-4 lg:py-5">
         <form onSubmit={handleSubmit} class="flex items-end gap-3 lg:gap-4">
-          <div class="flex-1 relative group">
+          <div class="flex-1 relative group h-14">
             <textarea
               value={message}
               onInput={(e) => setMessage((e.target as HTMLTextAreaElement).value)}
               onKeyDown={handleKeyDown}
-              class="w-full px-5 py-2.5 text-base rounded-2xl border border-dark-200/50 dark:border-white/10 bg-white/50 dark:bg-white/5 text-dark-900 dark:text-white resize-none focus:outline-none focus:ring-2 focus:ring-primary-500/30 transition-all duration-300 placeholder-dark-400 dark:placeholder-dark-600 shadow-sm leading-relaxed min-h-[56px]"
+              class="w-full h-full px-5 py-2.5 text-base rounded-2xl border border-dark-200/50 dark:border-white/10 bg-white/50 dark:bg-white/5 text-dark-900 dark:text-white resize-none focus:outline-none focus:ring-2 focus:ring-primary-500/30 transition-all duration-300 placeholder-dark-400 dark:placeholder-dark-600 shadow-sm leading-relaxed"
               placeholder="Type a secure message..."
               rows={1}
               disabled={isSending}
               style={{
-                minHeight: '56px',
                 maxHeight: '140px',
+                overflowY: 'auto',
               }}
             />
             <div class="absolute right-4 bottom-3.5 flex items-center gap-2">
