@@ -22,13 +22,13 @@ End-to-end encrypted chat application built with Preact + Convex + libsodium.js.
 ### 1. Install dependencies
 
 ```bash
-npm install
+bun install
 ```
 
 ### 2. Setup Convex
 
 ```bash
-npx convex dev
+bunx convex dev
 ```
 
 This will:
@@ -44,12 +44,12 @@ Copy `.env.example` to `.env` and set your Convex URL:
 cp .env.example .env
 ```
 
-The Convex URL will be shown when you run `npx convex dev`.
+The Convex URL will be shown when you run `bunx convex dev`.
 
 ### 4. Start development server
 
 ```bash
-npm run dev
+bun run dev
 ```
 
 Open http://localhost:5173 in your browser.
@@ -59,16 +59,21 @@ Open http://localhost:5173 in your browser.
 ### Deploy Convex
 
 ```bash
-npx convex deploy
+bunx convex deploy
 ```
 
-### Deploy Frontend to Vercel
+### Deploy Frontend to Netlify
 
+You can deploy manually or connect your repository to Netlify.
+
+**Manual Deployment:**
 ```bash
-npx vercel
+bun run build
+bunx netlify deploy --prod
 ```
 
-Or connect your GitHub repo to Vercel for automatic deployments.
+**Automatic Deployment:**
+Connect your GitHub/GitLab repository to Netlify. The `netlify.toml` file handles the configuration.
 
 ## Project Structure
 
