@@ -1,24 +1,38 @@
 import { useState } from 'preact/hooks';
 import { LoginForm } from './LoginForm';
 import { RegisterForm } from './RegisterForm';
+import { useTheme } from '../../contexts/ThemeContext';
 
 export function AuthScreen() {
   const [mode, setMode] = useState<'login' | 'register'>('login');
+  const { isDark, toggleTheme } = useTheme();
 
   return (
-    <div class="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-primary-50 to-dark-100 dark:from-dark-950 dark:to-dark-900 transition-colors duration-300">
-      <div class="w-full max-w-md animate-fade-in-up">
+    <div class="min-h-screen flex items-center justify-center p-4 bg-dark-50 dark:bg-dark-950">
+      {/* Theme Toggle */}
+      <button
+        onClick={toggleTheme}
+        class="absolute top-4 right-4 p-2 rounded-lg text-dark-500 hover:text-dark-700 dark:text-dark-400 dark:hover:text-dark-200 hover:bg-dark-100 dark:hover:bg-dark-800 transition-colors"
+      >
+        <div class={`w-5 h-5 ${isDark ? 'i-carbon-sun' : 'i-carbon-moon'}`} />
+      </button>
+
+      <div class="w-full max-w-sm">
+        {/* Logo */}
         <div class="text-center mb-8">
-          <div class="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-tr from-primary-600 to-primary-500 rounded-3xl shadow-lg shadow-primary-500/30 mb-6 transform hover:scale-105 transition-transform duration-300">
-            <span class="i-carbon-chat text-4xl text-white" />
+          <div class="inline-flex items-center justify-center w-14 h-14 bg-primary-500 rounded-2xl mb-4">
+            <div class="i-carbon-chat w-7 h-7 text-white" />
           </div>
-          <h1 class="text-3xl font-bold text-dark-900 dark:text-white mb-2">Privacy Chat</h1>
-          <p class="text-dark-500 dark:text-dark-400 text-lg">End-to-end encrypted messaging</p>
+          <h1 class="text-2xl font-bold text-dark-900 dark:text-white">Welcome</h1>
+          <p class="text-dark-500 dark:text-dark-400 text-sm mt-1">
+            Secure, encrypted messaging
+          </p>
         </div>
 
-        <div class="glass-card p-8 backdrop-blur-xl bg-white/80 dark:bg-dark-900/60 shadow-2xl shadow-primary-500/10 border-white/20 dark:border-dark-700/30">
-          <h2 class="text-2xl font-bold text-dark-900 dark:text-white mb-6 text-center">
-            {mode === 'login' ? 'Welcome back' : 'Create your account'}
+        {/* Card */}
+        <div class="bg-white dark:bg-dark-900 rounded-2xl border border-dark-200 dark:border-dark-800 p-6 shadow-lg">
+          <h2 class="text-lg font-semibold text-dark-900 dark:text-white mb-6 text-center">
+            {mode === 'login' ? 'Sign in' : 'Create account'}
           </h2>
 
           {mode === 'login' ? (
@@ -28,11 +42,10 @@ export function AuthScreen() {
           )}
         </div>
 
-        <p class="text-center text-xs text-dark-400 dark:text-dark-500 mt-8 leading-relaxed">
-          <span class="i-carbon-locked inline-block mr-1 align-text-bottom" />
-          Your messages are encrypted on your device before being sent.
-          <br />
-          We cannot read your messages.
+        {/* Footer */}
+        <p class="text-center text-xs text-dark-400 dark:text-dark-500 mt-6 flex items-center justify-center gap-1.5">
+          <div class="i-carbon-locked w-4 h-4" />
+          End-to-end encrypted
         </p>
       </div>
     </div>
