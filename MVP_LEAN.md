@@ -14,7 +14,7 @@
 | 1-to-1 chat dengan E2EE | Core value proposition |
 | Real-time message delivery | Essential UX |
 | Message status (sent/delivered/read) | Basic feedback |
-| Edit/delete messages | **Privacy-first**: user harus kontrol penuh atas data |
+| Edit/delete messages | Kontrol penuh atas data |
 | Web app only | Fokus satu platform dulu |
 
 ### ❌ CUT - Tunda ke Post-MVP
@@ -34,127 +34,136 @@
 
 ---
 
-## Tech Stack (Simplified)
+## Tech Stack (Ultra-Lightweight dengan Convex)
 
 ```
-Backend:    Node.js + Express + TypeScript
-Database:   PostgreSQL (single instance)
-Cache:      Redis (sessions + rate limiting only)
-Real-time:  Socket.io
-ORM:        Prisma
-Auth:       JWT (RS256)
-Encryption: @signalapp/libsignal-client
-Frontend:   React + Vite + TypeScript + Zustand
-Styling:    TailwindCSS
+Database:    Convex (free tier)        ← Real-time DB + serverless functions
+Real-time:   Convex subscriptions      ← Built-in, no WebSocket server needed
+Auth:        Convex Auth               ← Built-in auth system
+Encryption:  libsodium.js (25KB)       ← Client-side E2EE
+Frontend:    Preact + Vite + TypeScript
+State:       Convex React hooks        ← Real-time state dari Convex
+Styling:     UnoCSS
+Hosting:     Vercel (free plan)        ← Frontend + CDN + SSL
 ```
 
-**Catatan**: Tidak perlu Docker untuk development awal. Gunakan PostgreSQL dan Redis lokal.
+### Kenapa Convex?
+
+| Traditional Stack | Convex | Savings |
+|-------------------|--------|---------|
+| PostgreSQL + PgBouncer | ✅ Included | No DB management |
+| Redis pub/sub | ✅ Included | No cache server |
+| WebSocket server (ws) | ✅ Included | No WS management |
+| Fastify API server | ✅ Included | No backend server |
+| VPS ($5-20/month) | **$0** | Free tier covers MVP |
+
+### Convex Free Tier Limits
+
+```
+Functions:     Unlimited (with rate limits)
+Database:      1GB storage
+Bandwidth:     Generous (unmetered for small apps)
+Real-time:     Unlimited subscriptions
+File storage:  1GB
+```
+
+### Arsitektur Baru (Serverless)
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                        FRONTEND                              │
+│  Preact + Convex Client + libsodium.js                      │
+│  Hosted on: Vercel/Netlify (FREE)                           │
+└─────────────────────┬───────────────────────────────────────┘
+                      │ HTTPS
+                      ▼
+┌─────────────────────────────────────────────────────────────┐
+│                     CONVEX (FREE TIER)                       │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐         │
+│  │  Database   │  │  Real-time  │  │  Functions  │         │
+│  │  (1GB free) │  │  Subscript. │  │  (serverless)│        │
+│  └─────────────┘  └─────────────┘  └─────────────┘         │
+└─────────────────────────────────────────────────────────────┘
+
+Total infrastructure cost: $0/month
+```
+
+### Kapan Butuh VPS (2 vCPU, 1GB)?
+
+VPS hanya diperlukan jika:
+1. **Custom auth** - OAuth providers yang tidak didukung Convex
+2. **File processing** - Image compression sebelum upload
+3. **External integrations** - Email service, push notifications
+4. **Scale beyond free tier** - Jika traffic tinggi
+
+Untuk MVP: **VPS tidak diperlukan**
 
 ---
 
-## Database Schema (Minimal)
+## Database Schema (Convex)
 
-```sql
--- Core tables only, no bloat
+```typescript
+// convex/schema.ts
+import { defineSchema, defineTable } from "convex/server";
+import { v } from "convex/values";
 
--- Users
-CREATE TABLE users (
-  id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  email         VARCHAR(255) UNIQUE NOT NULL,
-  password_hash VARCHAR(255) NOT NULL,
-  display_name  VARCHAR(50) NOT NULL,
-  created_at    TIMESTAMPTZ DEFAULT NOW(),
-  updated_at    TIMESTAMPTZ DEFAULT NOW()
-);
-CREATE INDEX idx_users_email ON users(email);
+export default defineSchema({
+  // Users (auth handled by Convex Auth)
+  users: defineTable({
+    email: v.string(),
+    displayName: v.string(),
+    publicKey: v.string(),  // X25519 public key (Base64)
+  })
+    .index("by_email", ["email"]),
 
--- Signal Protocol Keys
-CREATE TABLE user_identity_keys (
-  user_id         UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
-  public_key      BYTEA NOT NULL,  -- Ed25519 public key
-  created_at      TIMESTAMPTZ DEFAULT NOW()
-);
+  // Conversations (1-to-1)
+  conversations: defineTable({
+    participantIds: v.array(v.id("users")),  // Exactly 2 users
+  })
+    .index("by_participants", ["participantIds"]),
 
-CREATE TABLE user_pre_keys (
-  id          SERIAL PRIMARY KEY,
-  user_id     UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  key_id      INTEGER NOT NULL,
-  public_key  BYTEA NOT NULL,
-  used        BOOLEAN DEFAULT FALSE,
-  created_at  TIMESTAMPTZ DEFAULT NOW(),
-  UNIQUE(user_id, key_id)
-);
-CREATE INDEX idx_pre_keys_user_unused ON user_pre_keys(user_id, used) WHERE used = FALSE;
-
-CREATE TABLE user_signed_pre_keys (
-  user_id     UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
-  key_id      INTEGER NOT NULL,
-  public_key  BYTEA NOT NULL,
-  signature   BYTEA NOT NULL,
-  created_at  TIMESTAMPTZ DEFAULT NOW()
-);
-
--- Conversations (1-to-1 only for MVP)
-CREATE TABLE conversations (
-  id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  created_at    TIMESTAMPTZ DEFAULT NOW(),
-  updated_at    TIMESTAMPTZ DEFAULT NOW()
-);
-
-CREATE TABLE conversation_participants (
-  conversation_id UUID NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
-  user_id         UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  joined_at       TIMESTAMPTZ DEFAULT NOW(),
-  PRIMARY KEY (conversation_id, user_id)
-);
-CREATE INDEX idx_conv_participants_user ON conversation_participants(user_id);
-
--- Unique constraint: one conversation per user pair
-CREATE UNIQUE INDEX idx_conv_pair ON conversation_participants(
-  LEAST(user_id, (SELECT user_id FROM conversation_participants cp2
-                  WHERE cp2.conversation_id = conversation_participants.conversation_id
-                  AND cp2.user_id != conversation_participants.user_id)),
-  GREATEST(user_id, (SELECT user_id FROM conversation_participants cp2
-                     WHERE cp2.conversation_id = conversation_participants.conversation_id
-                     AND cp2.user_id != conversation_participants.user_id))
-);
-
--- Messages (encrypted)
-CREATE TABLE messages (
-  id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  conversation_id UUID NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
-  sender_id       UUID NOT NULL REFERENCES users(id),
-
-  -- Encrypted content (client encrypts, server stores blob)
-  ciphertext      BYTEA,  -- NULL when deleted
-
-  -- Edit/Delete support (privacy-first: no history stored)
-  is_deleted      BOOLEAN DEFAULT FALSE,
-  edited_at       TIMESTAMPTZ,  -- NULL if never edited
-
-  -- Timestamps
-  created_at      TIMESTAMPTZ DEFAULT NOW(),
-  delivered_at    TIMESTAMPTZ,
-  read_at         TIMESTAMPTZ
-);
-
--- CRITICAL: Proper indexing for performance
-CREATE INDEX idx_messages_conv_created ON messages(conversation_id, created_at DESC);
-CREATE INDEX idx_messages_sender ON messages(sender_id);
-
--- Sessions (for JWT refresh tokens)
-CREATE TABLE sessions (
-  id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id       UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  refresh_token VARCHAR(500) NOT NULL,
-  expires_at    TIMESTAMPTZ NOT NULL,
-  created_at    TIMESTAMPTZ DEFAULT NOW()
-);
-CREATE INDEX idx_sessions_user ON sessions(user_id);
-CREATE INDEX idx_sessions_token ON sessions(refresh_token);
+  // Messages (encrypted)
+  messages: defineTable({
+    conversationId: v.id("conversations"),
+    senderId: v.id("users"),
+    ciphertext: v.union(v.string(), v.null()),  // Base64, null when deleted
+    nonce: v.string(),                           // Base64 nonce
+    isDeleted: v.boolean(),
+    editedAt: v.union(v.number(), v.null()),    // Timestamp, null if never edited
+    deliveredAt: v.union(v.number(), v.null()),
+    readAt: v.union(v.number(), v.null()),
+  })
+    .index("by_conversation", ["conversationId"])
+    .index("by_conversation_time", ["conversationId", "_creationTime"]),
+});
 ```
 
-**Total: 7 tables** (vs 10+ di requirements asli)
+**Total: 3 tables** (users, conversations, messages)
+
+### Kenapa Lebih Sedikit Tables?
+
+| PostgreSQL | Convex | Alasan |
+|------------|--------|--------|
+| users + user_keys | **users** | Public key jadi field di users |
+| conversations + participants | **conversations** | participantIds array, no join table |
+| sessions | **Tidak perlu** | Convex Auth handles sessions |
+| messages | **messages** | Same |
+
+### Convex Indexes
+
+```typescript
+// Convex auto-indexes _id dan _creationTime
+// Custom indexes untuk query patterns:
+
+.index("by_conversation_time", ["conversationId", "_creationTime"])
+// Untuk: Get messages by conversation, sorted by time (pagination)
+
+.index("by_email", ["email"])
+// Untuk: Find user by email (login/search)
+
+.index("by_participants", ["participantIds"])
+// Untuk: Find existing conversation between 2 users
+```
 
 ---
 
@@ -210,46 +219,105 @@ function canEditMessage(message: Message): boolean {
 
 ---
 
-## API Endpoints (Minimal)
+## Convex Functions (API)
 
-```
-Auth (4 endpoints):
-POST   /api/auth/register     - Create account
-POST   /api/auth/login        - Login, get tokens
-POST   /api/auth/refresh      - Refresh access token
-POST   /api/auth/logout       - Invalidate session
+```typescript
+// convex/functions struktur
 
-Users (3 endpoints):
-GET    /api/users/me          - Get own profile
-PUT    /api/users/me          - Update profile
-GET    /api/users/search      - Search users by email/name
+// Auth (Convex Auth built-in)
+auth.signUp          - Register dengan email/password
+auth.signIn          - Login
+auth.signOut         - Logout
+// Session management otomatis oleh Convex
 
-Keys (2 endpoints):
-GET    /api/keys/:userId      - Get user's pre-key bundle (for E2EE handshake)
-POST   /api/keys/replenish    - Upload new pre-keys when running low
+// Users (queries & mutations)
+users.getMe          - Get current user profile
+users.update         - Update profile
+users.search         - Search by email/displayName
+users.getPublicKey   - Get user's public key
 
-Conversations (3 endpoints):
-GET    /api/conversations                     - List conversations
-POST   /api/conversations                     - Create/get conversation with user
-GET    /api/conversations/:id/messages        - Get messages (paginated)
+// Conversations
+conversations.list   - List user's conversations (real-time)
+conversations.getOrCreate - Find/create conversation with user
+conversations.getMessages - Get messages (paginated, real-time)
 
-Messages (4 endpoints):
-POST   /api/messages                          - Send encrypted message
-PUT    /api/messages/:id                      - Edit message (re-encrypt)
-DELETE /api/messages/:id                      - Delete message
-POST   /api/messages/:id/read                 - Mark as read
-
-WebSocket Events (7 events):
-→ message:send          - Client sends message
-← message:received      - Server broadcasts to recipient
-← message:delivered     - Delivery confirmation
-← message:read          - Read receipt
-← message:edited        - Message was edited
-← message:deleted       - Message was deleted
-← error                 - Error notification
+// Messages
+messages.send        - Send encrypted message
+messages.edit        - Edit (re-encrypt)
+messages.delete      - Hard delete
+messages.markRead    - Mark as read
+messages.markDelivered - Mark as delivered
 ```
 
-**Total: 16 endpoints + 7 WebSocket events** (vs 30+ di requirements asli)
+### Real-time Subscriptions (Automatic!)
+
+```typescript
+// Frontend - data auto-update tanpa WebSocket manual
+const conversations = useQuery(api.conversations.list);
+const messages = useQuery(api.conversations.getMessages, { conversationId });
+
+// Convex handles:
+// ✅ Real-time sync (otomatis)
+// ✅ Optimistic updates
+// ✅ Offline support
+// ✅ Reconnection
+```
+
+**Total: 12 functions** (no manual WebSocket, Convex handles real-time)
+
+---
+
+## Scaling dengan Convex
+
+### Convex Handles Everything
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    CONVEX INFRASTRUCTURE                     │
+│                                                              │
+│  ✅ Auto-scaling (kamu tidak perlu manage)                  │
+│  ✅ Global edge network                                      │
+│  ✅ Real-time sync (built-in)                               │
+│  ✅ Connection pooling (automatic)                          │
+│  ✅ Database replication (automatic)                        │
+│                                                              │
+│  Free tier handles: ~1000 concurrent users easily           │
+│  Paid tier: Unlimited scaling                               │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Free Tier Realistic Capacity
+
+```
+Convex Free Tier dapat handle:
+├── Concurrent users:      ~500-1000
+├── Messages per day:      ~50,000
+├── Database storage:      1GB (~500K messages)
+└── Real-time connections: Unlimited
+```
+
+### Kapan Upgrade dari Free Tier?
+
+| Metric | Free Tier Limit | Action |
+|--------|-----------------|--------|
+| Storage > 1GB | ~500K messages | Upgrade atau implement message retention |
+| High traffic | Rate limited | Upgrade to paid ($25/month) |
+| Need more regions | US only | Upgrade for global edge |
+
+### VPS (2 vCPU, 1GB) - Optional Uses
+
+Jika nanti butuh VPS, gunakan untuk:
+```
+1. Image compression service (Sharp.js)
+2. Email sending (Nodemailer)
+3. Push notification server
+4. Custom analytics
+
+NOT for:
+- Database (use Convex)
+- WebSocket (use Convex)
+- API server (use Convex)
+```
 
 ---
 
@@ -326,99 +394,121 @@ async function getMessages(
 }
 ```
 
-### 4. WebSocket Connection Management
+### 4. Real-time dengan Convex (Zero Config)
 
 ```typescript
-// services/socket.service.ts
+// Frontend - real-time subscriptions automatic
+import { useQuery, useMutation } from "convex/react";
+import { api } from "../convex/_generated/api";
 
-class SocketManager {
-  private connections = new Map<string, Socket>(); // userId -> socket
+function ChatScreen({ conversationId }) {
+  // Auto-updates when new messages arrive
+  // No WebSocket setup needed!
+  const messages = useQuery(api.conversations.getMessages, {
+    conversationId,
+    limit: 20
+  });
 
-  // Single connection per user (MVP - no multi-device)
-  handleConnection(socket: Socket, userId: string) {
-    // Disconnect existing connection if any
-    const existing = this.connections.get(userId);
-    if (existing) {
-      existing.disconnect(true);
-    }
+  const sendMessage = useMutation(api.messages.send);
 
-    this.connections.set(userId, socket);
+  // Optimistic update built-in
+  const handleSend = async (ciphertext: string, nonce: string) => {
+    await sendMessage({ conversationId, ciphertext, nonce });
+    // UI updates optimistically, then confirms with server
+  };
 
-    socket.on('disconnect', () => {
-      this.connections.delete(userId);
-    });
-  }
-
-  // Direct send - O(1) lookup
-  sendToUser(userId: string, event: string, data: unknown) {
-    const socket = this.connections.get(userId);
-    if (socket) {
-      socket.emit(event, data);
-    }
-    // TODO: Queue for offline users (post-MVP)
-  }
+  return (
+    <MessageList messages={messages} />
+  );
 }
 ```
 
-### 5. Frontend State Architecture
+### Convex vs Manual WebSocket
+
+| Aspect | Manual (ws + Redis) | Convex |
+|--------|---------------------|--------|
+| Setup code | ~200 lines | 0 lines |
+| Connection management | Manual | Automatic |
+| Reconnection | Manual | Automatic |
+| Offline queue | Manual | Automatic |
+| Optimistic updates | Manual | Built-in |
+| Scaling | Redis pub/sub setup | Automatic |
+
+### Memory Footprint
+
+```
+Your server:     0 KB (no server needed!)
+Convex handles:  Everything
+
+Comparison jika self-hosted:
+  Socket.io: ~200MB for 10K connections
+  ws:        ~20MB for 10K connections
+  Convex:    $0, unlimited connections on free tier
+```
+
+### 5. Frontend dengan Convex (No State Management Needed)
 
 ```typescript
-// stores/messages.store.ts
-import { create } from 'zustand';
+// Convex handles state automatically!
+// No Zustand, no Redux, no state management library
 
-interface MessagesState {
-  // Normalized state - O(1) lookups
-  byId: Record<string, Message>;
-  // Ordered IDs per conversation
-  byConversation: Record<string, string[]>;
+// components/chat/MessageList.tsx
+import { useQuery } from "convex/react";
+import { api } from "../../convex/_generated/api";
 
-  // Pagination state
-  cursors: Record<string, string | null>;
-  hasMore: Record<string, boolean>;
+function MessageList({ conversationId }) {
+  // Real-time, auto-updating, paginated
+  const messages = useQuery(api.conversations.getMessages, {
+    conversationId,
+    limit: 20
+  });
 
-  // Actions
-  addMessage: (msg: Message) => void;
-  setMessages: (convId: string, msgs: Message[], cursor: string | null, hasMore: boolean) => void;
+  // Loading state
+  if (messages === undefined) return <Loading />;
+
+  return (
+    <div>
+      {messages.map(msg => (
+        <MessageBubble key={msg._id} message={msg} />
+      ))}
+    </div>
+  );
 }
 
-export const useMessagesStore = create<MessagesState>((set) => ({
-  byId: {},
-  byConversation: {},
-  cursors: {},
-  hasMore: {},
+// components/chat/ConversationList.tsx
+function ConversationList() {
+  // Auto-updates when new conversations or messages arrive
+  const conversations = useQuery(api.conversations.list);
 
-  addMessage: (msg) => set((state) => ({
-    byId: { ...state.byId, [msg.id]: msg },
-    byConversation: {
-      ...state.byConversation,
-      [msg.conversationId]: [
-        msg.id,
-        ...(state.byConversation[msg.conversationId] || [])
-      ]
-    }
-  })),
+  if (conversations === undefined) return <Loading />;
 
-  setMessages: (convId, msgs, cursor, hasMore) => set((state) => {
-    const newById = { ...state.byId };
-    const ids: string[] = [];
-
-    for (const msg of msgs) {
-      newById[msg.id] = msg;
-      ids.push(msg.id);
-    }
-
-    return {
-      byId: newById,
-      byConversation: {
-        ...state.byConversation,
-        [convId]: [...(state.byConversation[convId] || []), ...ids]
-      },
-      cursors: { ...state.cursors, [convId]: cursor },
-      hasMore: { ...state.hasMore, [convId]: hasMore }
-    };
-  })
-}));
+  return (
+    <ul>
+      {conversations.map(conv => (
+        <ConversationItem key={conv._id} conversation={conv} />
+      ))}
+    </ul>
+  );
+}
 ```
+
+### Frontend Bundle Size Target
+
+```
+Preact:           ~4KB gzipped
+Convex client:    ~15KB gzipped
+libsodium.js:     ~25KB gzipped
+UnoCSS:           ~5KB gzipped
+App code:         ~30KB gzipped
+--------------------------------------
+Total:            <80KB gzipped
+```
+
+### Tidak Perlu:
+- ❌ Zustand/Redux (Convex = state)
+- ❌ React Query/SWR (Convex = caching)
+- ❌ Socket.io client (Convex = real-time)
+- ❌ Axios (Convex = API calls)
 
 ### 6. Optimistic Updates
 
@@ -469,192 +559,233 @@ function useSendMessage() {
 
 ---
 
-## Signal Protocol Integration (Simplified)
+## Encryption (Lightweight E2EE)
 
-### Key Generation (On Registration)
+### Dua Opsi Encryption
+
+| Opsi | Library | Size | Complexity | Security |
+|------|---------|------|------------|----------|
+| **A. Lightweight** | libsodium.js | ~25KB | Simple | Strong (no PFS) |
+| **B. Full Signal** | libsignal | ~200KB | Complex | Strongest (PFS) |
+
+**Rekomendasi MVP**: Opsi A dulu, upgrade ke Signal Protocol di Phase 2.
+
+### Opsi A: Lightweight E2EE dengan libsodium.js
 
 ```typescript
-// services/crypto.service.ts
-import * as signal from '@signalapp/libsignal-client';
+// services/crypto.ts
+import sodium from 'libsodium-wrappers-sumo';
 
-async function generateKeys() {
-  // Identity key pair (long-term)
-  const identityKeyPair = signal.PrivateKey.generate();
+await sodium.ready;
 
-  // Signed pre-key (rotate weekly)
-  const signedPreKey = signal.PrivateKey.generate();
-  const signedPreKeySignature = identityKeyPair.sign(
-    signedPreKey.getPublicKey().serialize()
-  );
-
-  // One-time pre-keys (batch of 100)
-  const preKeys: PreKey[] = [];
-  for (let i = 0; i < 100; i++) {
-    preKeys.push({
-      keyId: i,
-      keyPair: signal.PrivateKey.generate()
-    });
-  }
-
+// Key Generation (on registration)
+function generateKeyPair() {
+  const keyPair = sodium.crypto_box_keypair();
   return {
-    identityKeyPair,
-    signedPreKey: { keyId: 0, keyPair: signedPreKey, signature: signedPreKeySignature },
-    preKeys
+    publicKey: sodium.to_base64(keyPair.publicKey),
+    privateKey: keyPair.privateKey  // Store securely, never send to server
   };
 }
-```
 
-### X3DH Key Exchange (Starting Conversation)
+// Encrypt message (sender side)
+function encryptMessage(
+  plaintext: string,
+  recipientPublicKey: Uint8Array,
+  senderPrivateKey: Uint8Array
+): { ciphertext: string; nonce: string } {
+  const nonce = sodium.randombytes_buf(sodium.crypto_box_NONCEBYTES);
+  const message = sodium.from_string(plaintext);
 
-```typescript
-// Simplified flow - use library's built-in functions
-async function initiateSession(recipientId: string) {
-  // 1. Fetch recipient's pre-key bundle
-  const bundle = await api.get(`/keys/${recipientId}`);
-
-  // 2. Create session using Signal library
-  const session = await signal.SessionBuilder.processPreKeyBundle(
-    bundle.identityKey,
-    bundle.signedPreKey,
-    bundle.signedPreKeySignature,
-    bundle.preKey // one-time, consumed after use
+  const ciphertext = sodium.crypto_box_easy(
+    message,
+    nonce,
+    recipientPublicKey,
+    senderPrivateKey
   );
 
-  // 3. Store session locally (IndexedDB)
-  await sessionStore.save(recipientId, session);
+  return {
+    ciphertext: sodium.to_base64(ciphertext),
+    nonce: sodium.to_base64(nonce)
+  };
+}
 
-  return session;
+// Decrypt message (recipient side)
+function decryptMessage(
+  ciphertext: string,
+  nonce: string,
+  senderPublicKey: Uint8Array,
+  recipientPrivateKey: Uint8Array
+): string {
+  const decrypted = sodium.crypto_box_open_easy(
+    sodium.from_base64(ciphertext),
+    sodium.from_base64(nonce),
+    senderPublicKey,
+    recipientPrivateKey
+  );
+
+  return sodium.to_string(decrypted);
 }
 ```
 
-### Message Encryption/Decryption
+### Key Exchange Flow (Simplified X25519)
 
-```typescript
-async function encryptMessage(recipientId: string, plaintext: string): Promise<Uint8Array> {
-  const session = await sessionStore.get(recipientId);
-  if (!session) {
-    await initiateSession(recipientId);
-  }
+```
+Registration:
+1. Client generates X25519 key pair
+2. Client sends PUBLIC key to server
+3. Server stores public key
+4. PRIVATE key stays on device only (IndexedDB encrypted)
 
-  // Signal Protocol handles Double Ratchet internally
-  return session.encrypt(new TextEncoder().encode(plaintext));
-}
+Starting Conversation:
+1. Alice fetches Bob's public key from server
+2. Alice encrypts message with: crypto_box(message, nonce, bob_public, alice_private)
+3. Server receives ciphertext (cannot decrypt)
+4. Bob decrypts with: crypto_box_open(ciphertext, nonce, alice_public, bob_private)
+```
 
-async function decryptMessage(senderId: string, ciphertext: Uint8Array): Promise<string> {
-  const session = await sessionStore.get(senderId);
-  const plaintext = await session.decrypt(ciphertext);
-  return new TextDecoder().decode(plaintext);
-}
+### Database Schema untuk Lightweight Crypto
+
+```sql
+-- Simplified: hanya public key, tidak perlu pre-keys
+CREATE TABLE user_keys (
+  user_id       UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  public_key    VARCHAR(64) NOT NULL,  -- Base64 encoded X25519 public key
+  created_at    TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Messages menyimpan nonce bersama ciphertext
+CREATE TABLE messages (
+  id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  conversation_id UUID NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+  sender_id       UUID NOT NULL REFERENCES users(id),
+  ciphertext      TEXT,          -- Base64 encoded, NULL when deleted
+  nonce           VARCHAR(32),   -- Base64 encoded nonce
+  is_deleted      BOOLEAN DEFAULT FALSE,
+  edited_at       TIMESTAMPTZ,
+  created_at      TIMESTAMPTZ DEFAULT NOW(),
+  delivered_at    TIMESTAMPTZ,
+  read_at         TIMESTAMPTZ
+);
+```
+
+### Kenapa Opsi A untuk MVP?
+
+| Aspect | libsodium (Opsi A) | Signal Protocol (Opsi B) |
+|--------|-------------------|-------------------------|
+| Bundle size | ~25KB | ~200KB |
+| Key management | 1 key pair | Identity + Pre-keys + Signed Pre-keys |
+| Server complexity | Simple | Complex (pre-key replenishment) |
+| Perfect Forward Secrecy | No | Yes |
+| Time to implement | 1-2 days | 1-2 weeks |
+
+**Trade-off**: Tanpa PFS, jika private key bocor, semua pesan lama bisa didekripsi. Untuk MVP dengan user base kecil, ini acceptable. Upgrade ke Signal Protocol saat scaling.
+
+### Upgrade Path ke Signal Protocol (Phase 2)
+
+```
+1. Implement Signal Protocol alongside existing crypto
+2. New conversations use Signal Protocol
+3. Existing conversations stay on libsodium
+4. Gradually migrate as users re-authenticate
+5. Remove libsodium after 100% migration
 ```
 
 ---
 
-## Project Structure
+## Project Structure (Convex)
 
 ```
 chat-app/
-├── backend/
-│   ├── src/
-│   │   ├── index.ts              # Entry point
-│   │   ├── config/
-│   │   │   └── env.ts            # Environment variables
-│   │   ├── middleware/
-│   │   │   ├── auth.ts           # JWT verification
-│   │   │   ├── rateLimit.ts      # Rate limiting
-│   │   │   └── errorHandler.ts   # Global error handler
-│   │   ├── routes/
-│   │   │   ├── auth.routes.ts
-│   │   │   ├── user.routes.ts
-│   │   │   ├── conversation.routes.ts
-│   │   │   └── message.routes.ts
-│   │   ├── services/
-│   │   │   ├── auth.service.ts
-│   │   │   ├── user.service.ts
-│   │   │   ├── message.service.ts
-│   │   │   └── socket.service.ts
-│   │   └── types/
-│   │       └── index.ts
-│   ├── prisma/
-│   │   └── schema.prisma
-│   ├── package.json
-│   └── tsconfig.json
+├── convex/                        # Convex backend (serverless)
+│   ├── _generated/               # Auto-generated types
+│   ├── schema.ts                 # Database schema
+│   ├── auth.ts                   # Auth functions
+│   ├── users.ts                  # User queries/mutations
+│   ├── conversations.ts          # Conversation functions
+│   └── messages.ts               # Message functions
 │
-├── frontend/
-│   ├── src/
-│   │   ├── main.tsx
-│   │   ├── App.tsx
-│   │   ├── components/
-│   │   │   ├── auth/
-│   │   │   │   ├── LoginForm.tsx
-│   │   │   │   └── RegisterForm.tsx
-│   │   │   └── chat/
-│   │   │       ├── ConversationList.tsx
-│   │   │       ├── MessageList.tsx
-│   │   │       └── MessageInput.tsx
-│   │   ├── stores/
-│   │   │   ├── auth.store.ts
-│   │   │   ├── conversations.store.ts
-│   │   │   └── messages.store.ts
-│   │   ├── services/
-│   │   │   ├── api.ts            # Axios instance
-│   │   │   ├── socket.ts         # Socket.io client
-│   │   │   └── crypto.ts         # Signal Protocol
-│   │   └── hooks/
-│   │       ├── useAuth.ts
-│   │       └── useMessages.ts
-│   ├── package.json
-│   └── vite.config.ts
+├── src/                          # Frontend (Preact)
+│   ├── main.tsx                  # Entry point
+│   ├── app.tsx                   # Root component + ConvexProvider
+│   ├── components/
+│   │   ├── auth/
+│   │   │   ├── LoginForm.tsx
+│   │   │   └── RegisterForm.tsx
+│   │   └── chat/
+│   │       ├── ConversationList.tsx
+│   │       ├── MessageList.tsx
+│   │       └── MessageInput.tsx
+│   ├── lib/
+│   │   └── crypto.ts             # libsodium.js encryption
+│   └── hooks/
+│       └── useEncryption.ts      # Encryption hooks
 │
-├── MVP_LEAN.md        # This file
-├── CLAUDE.md          # AI context
-└── .env.example
+├── public/
+├── index.html
+├── uno.config.ts
+├── vite.config.ts
+├── package.json
+├── MVP_LEAN.md
+└── CLAUDE.md
 ```
+
+### File Count Comparison
+
+| Traditional Stack | Convex Stack |
+|-------------------|--------------|
+| ~40 files | **~20 files** |
+| Backend + Frontend | Frontend only |
+| Complex setup | Simple setup |
 
 ---
 
-## Development Timeline (8-12 minggu)
+## Development Timeline (4-6 minggu dengan Convex)
 
-### Minggu 1-2: Foundation
-- [ ] Setup monorepo (backend + frontend)
-- [ ] PostgreSQL + Prisma schema
-- [ ] Basic Express server dengan TypeScript
-- [ ] Auth endpoints (register, login, logout)
-- [ ] JWT middleware
-
-### Minggu 3-4: Signal Protocol
-- [ ] Integrate @signalapp/libsignal-client
+### Minggu 1: Setup + Auth
+- [ ] Setup Vite + Preact + Convex
+- [ ] Convex schema (users, conversations, messages)
+- [ ] Convex Auth setup (email/password)
+- [ ] libsodium.js integration
 - [ ] Key generation on registration
-- [ ] Pre-key bundle endpoints
-- [ ] X3DH key exchange implementation
-- [ ] Session storage (IndexedDB)
 
-### Minggu 5-6: Messaging Core
+### Minggu 2: Messaging Core
+- [ ] Encryption/decryption functions
+- [ ] Send message mutation
+- [ ] Get messages query (paginated)
 - [ ] Conversation creation
-- [ ] Message encryption/decryption
-- [ ] Send message endpoint
-- [ ] Get messages (cursor pagination)
-- [ ] WebSocket setup
+- [ ] Real-time subscriptions (automatic!)
 
-### Minggu 7-8: Real-time
-- [ ] Socket.io authentication
-- [ ] Real-time message delivery
-- [ ] Delivery confirmation
-- [ ] Read receipts
-- [ ] Reconnection handling
-
-### Minggu 9-10: Frontend
-- [ ] React app setup
+### Minggu 3: Edit/Delete + UI
+- [ ] Edit message mutation
+- [ ] Delete message mutation
+- [ ] Message status (delivered, read)
 - [ ] Auth screens (login, register)
-- [ ] Conversation list
-- [ ] Chat screen
-- [ ] Message sending with optimistic updates
+- [ ] Conversation list component
 
-### Minggu 11-12: Polish & Deploy
-- [ ] Error handling
+### Minggu 4: Chat UI + Polish
+- [ ] Chat screen component
+- [ ] Message bubbles
 - [ ] Loading states
-- [ ] Basic responsive design
-- [ ] Deploy ke VPS
+- [ ] Error handling
+- [ ] Responsive design
+
+### Minggu 5-6: Testing + Deploy
 - [ ] Manual testing
+- [ ] Edge cases (offline, reconnect)
+- [ ] Deploy frontend ke Vercel
+- [ ] Domain setup
+- [ ] Done! 🚀
+
+### Timeline Comparison
+
+| Task | Traditional | Convex |
+|------|-------------|--------|
+| Backend setup | 2 weeks | 0 (tidak ada backend) |
+| Database setup | 1 week | 1 day |
+| WebSocket | 2 weeks | 0 (built-in) |
+| Auth | 1 week | 1 day |
+| API endpoints | 2 weeks | 3 days |
+| **Total** | **8-12 weeks** | **4-6 weeks** |
 
 ---
 
@@ -688,6 +819,37 @@ chat-app/
 - [ ] User bisa search user lain
 - [ ] User bisa mulai conversation
 - [ ] Messages terenkripsi end-to-end (verifiable)
-- [ ] Real-time delivery < 1 detik (same network)
-- [ ] Load 100 messages < 500ms
-- [ ] No memory leak setelah 1 jam usage
+- [ ] Edit/delete messages berfungsi
+- [ ] Real-time delivery < 500ms
+- [ ] Frontend bundle < 100KB gzipped
+- [ ] Works offline (Convex handles)
+- [ ] $0/month infrastructure cost
+
+## Cost Summary
+
+| Item | Cost | Limit |
+|------|------|-------|
+| Convex Free | $0 | 1GB DB, unlimited real-time |
+| Vercel Free | $0 | 100GB bandwidth/month |
+| Domain (optional) | $10-15/year | - |
+| **Total** | **$0/month** | ~10K active users |
+
+## Upgrade Path
+
+```
+MVP (Free) - $0/month:
+├── Convex Free (1GB, rate limited)
+└── Vercel Free (100GB bandwidth)
+    → Capacity: ~500-1000 concurrent users
+
+Growth ($45/month):
+├── Convex Pro ($25) - 10GB, no rate limits
+└── Vercel Pro ($20) - 1TB bandwidth, analytics
+    → Capacity: ~10,000+ concurrent users
+
+Scale ($200+/month):
+├── Convex Business - dedicated support, SLA
+├── Vercel Enterprise - custom limits
+└── + VPS for image processing if needed
+    → Capacity: Unlimited
+```
