@@ -35,7 +35,7 @@ export function AuthProvider({ children }: { children: preact.ComponentChildren 
 
   // Load token and keys on mount
   useEffect(() => {
-    const storedToken = sessionStorage.getItem(TOKEN_STORAGE_KEY);
+    const storedToken = localStorage.getItem(TOKEN_STORAGE_KEY);
     const storedKeyPair = loadKeyPair();
 
     if (storedToken) {
@@ -62,7 +62,7 @@ export function AuthProvider({ children }: { children: preact.ComponentChildren 
         });
 
         // Store token and keys
-        sessionStorage.setItem(TOKEN_STORAGE_KEY, result.token);
+        localStorage.setItem(TOKEN_STORAGE_KEY, result.token);
         storeKeyPair(newKeyPair);
 
         setToken(result.token);
@@ -118,7 +118,7 @@ export function AuthProvider({ children }: { children: preact.ComponentChildren 
     }
 
     // Clear storage
-    sessionStorage.removeItem(TOKEN_STORAGE_KEY);
+    localStorage.removeItem(TOKEN_STORAGE_KEY);
     clearKeyPair();
 
     setToken(null);
