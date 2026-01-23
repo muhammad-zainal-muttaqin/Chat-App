@@ -94,7 +94,7 @@ export function AuthProvider({ children }: { children: preact.ComponentChildren 
         }
 
         // Store token
-        sessionStorage.setItem(TOKEN_STORAGE_KEY, result.token);
+        localStorage.setItem(TOKEN_STORAGE_KEY, result.token);
 
         setToken(result.token);
         setKeyPair(currentKeyPair);
