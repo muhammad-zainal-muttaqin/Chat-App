@@ -84,14 +84,13 @@ export function AuthProvider({ children }: { children: preact.ComponentChildren 
 
         // Load existing keys
         let currentKeyPair = loadKeyPair();
-        
-        // If no keys exist, this is a new device/session
-        // Don't generate new keys automatically - user needs to use existing keys
-        // or explicitly regenerate (which would make old messages unreadable)
+
+        // If no keys exist (new device), generate new ones automatically
+        // NOTE: This means old messages will be unreadable, but allows immediate use on new devices
         if (!currentKeyPair) {
-          console.warn('No encryption keys found in localStorage. Old messages may not be decryptable.');
-          // For now, we'll still allow login but warn the user
-          // In production, you might want to require key recovery or show a warning
+          console.log('Generating new encryption keys for new session...');
+          currentKeyPair = generateKeyPair();
+          storeKeyPair(currentKeyPair);
         }
 
         // Store token
