@@ -18,7 +18,7 @@ interface ChatLayoutProps {
 }
 
 export function ChatLayout({ user }: ChatLayoutProps) {
-  const { logout, token } = useAuth();
+  const { logout, token, keyPair } = useAuth();
   const { isDark, toggleTheme } = useTheme();
   const [selectedConversationId, setSelectedConversationId] = useState<Id<'conversations'> | null>(null);
   const [showNewChat, setShowNewChat] = useState(false);
@@ -132,7 +132,7 @@ export function ChatLayout({ user }: ChatLayoutProps) {
             conversationId={selectedConversationId}
             token={token}
             currentUserId={user._id}
-            currentUserPublicKey={user.publicKey}
+            currentUserPublicKey={keyPair?.publicKey || user.publicKey}
             onBack={() => setSelectedConversationId(null)}
             onToggleSidebar={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
           />

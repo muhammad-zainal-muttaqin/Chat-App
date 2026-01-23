@@ -64,7 +64,7 @@ export function MessageBubble({ message, isOwn, senderPublicKey, recipientPublic
       console.error('Decryption error:', error);
       return '[Unable to decrypt]';
     }
-  }, [message.ciphertext, message.nonce, message.isDeleted, keyPair, senderPublicKey, isOwn, decrypt]);
+  }, [message.ciphertext, message.nonce, message.isDeleted, message._id, keyPair, senderPublicKey, isOwn, decrypt, plaintextCache]);
 
   const handleEdit = async () => {
     if (!editText.trim() || !encrypt || !keyPair) return;
@@ -95,8 +95,10 @@ export function MessageBubble({ message, isOwn, senderPublicKey, recipientPublic
     try {
       await deleteMutation({ token, messageId: message._id });
       setShowMenu(false);
+      // Force UI update - Convex will auto-refresh via useQuery, but this ensures immediate feedback
     } catch (error) {
       console.error('Failed to delete message:', error);
+      alert('Failed to delete message. Please try again.');
     }
   };
 

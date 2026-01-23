@@ -83,18 +83,16 @@ export function AuthProvider({ children }: { children: preact.ComponentChildren 
       try {
         const result = await loginMutation({ email, password });
 
-        // Load existing keys or generate new ones
+        // Load existing keys
         let currentKeyPair = loadKeyPair();
+        
+        // If no keys exist, this is a new device/session
+        // Don't generate new keys automatically - user needs to use existing keys
+        // or explicitly regenerate (which would make old messages unreadable)
         if (!currentKeyPair) {
-          // Generate new keys if none exist
-          currentKeyPair = generateKeyPair();
-          storeKeyPair(currentKeyPair);
-
-          // IMPORTANT: Update public key in database to match new keys
-          await updatePublicKeyMutation({
-            token: result.token,
-            publicKey: currentKeyPair.publicKey,
-          });
+          console.warn('No encryption keys found in localStorage. Old messages may not be decryptable.');
+          // For now, we'll still allow login but warn the user
+          // In production, you might want to require key recovery or show a warning
         }
 
         // Store token
@@ -109,7 +107,7 @@ export function AuthProvider({ children }: { children: preact.ComponentChildren 
         return { success: false, error: error.message || 'Login gagal. Periksa email dan password Anda.' };
       }
     },
-    [loginMutation, updatePublicKeyMutation]
+    [loginMutation]
   );
 
   const logout = useCallback(async () => {

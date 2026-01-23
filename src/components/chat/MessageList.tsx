@@ -31,7 +31,7 @@ export function MessageList({ messages, currentUserId, otherUserPublicKey, curre
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages.length]);
+  }, [messages.length, messages.map(m => `${m._id}-${m.isDeleted}`).join(',')]);
 
   const sortedMessages = [...messages].reverse();
 
@@ -56,7 +56,7 @@ export function MessageList({ messages, currentUserId, otherUserPublicKey, curre
               );
 
               return (
-                <div key={message._id}>
+                <div key={`${message._id}-${message.isDeleted}-${message.editedAt || ''}`}>
                   {showDate && (
                     <div class="flex justify-center my-6">
                       <span class="px-3 py-1 bg-dark-100 dark:bg-dark-800 rounded-full text-xs text-dark-500 dark:text-dark-400">
