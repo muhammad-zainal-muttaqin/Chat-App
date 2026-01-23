@@ -88,7 +88,7 @@ export function MessageInput({ conversationId, recipientPublicKey, token, onMess
               value={message}
               onInput={(e) => setMessage((e.target as HTMLTextAreaElement).value)}
               onKeyDown={handleKeyDown}
-              class="w-full h-full px-5 pt-3 pb-1.5 text-base rounded-2xl border border-dark-200/50 dark:border-white/10 bg-white/50 dark:bg-white/5 text-dark-900 dark:text-white resize-none focus:outline-none focus:ring-2 focus:ring-primary-500/30 transition-all duration-300 placeholder-dark-400 dark:placeholder-dark-600 shadow-sm leading-snug"
+              class="w-full h-full px-5 pt-4 pb-0 text-base rounded-2xl border border-dark-200/50 dark:border-white/10 bg-white/50 dark:bg-white/5 text-dark-900 dark:text-white resize-none focus:outline-none focus:ring-2 focus:ring-primary-500/30 transition-all duration-300 placeholder-dark-400 dark:placeholder-dark-600 shadow-sm leading-snug"
               placeholder="Type a secure message..."
               rows={1}
               disabled={isSending}
@@ -97,7 +97,7 @@ export function MessageInput({ conversationId, recipientPublicKey, token, onMess
                 overflowY: 'auto',
               }}
             />
-            <div class="absolute right-4 bottom-3.5 flex items-center gap-2">
+            <div class="absolute right-4 bottom-2 flex items-center gap-2">
               <button
                 type="button"
                 class="p-2 text-dark-400 hover:text-primary-500 transition-colors hidden sm:block opacity-70 hover:opacity-100"
