@@ -32,7 +32,6 @@ export function AuthProvider({ children }: { children: preact.ComponentChildren 
   const loginMutation = useMutation(api.auth.login);
   const registerMutation = useMutation(api.auth.register);
   const logoutMutation = useMutation(api.auth.logout);
-  const updatePublicKeyMutation = useMutation(api.auth.updatePublicKey);
 
   // Load token and keys on mount
   useEffect(() => {
