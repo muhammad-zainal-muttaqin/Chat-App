@@ -35,7 +35,7 @@ export function ChatLayout({ user }: ChatLayoutProps) {
   };
 
   return (
-    <div class="h-screen w-full flex overflow-hidden bg-dark-50 dark:bg-dark-950">
+    <div class="h-screen w-full flex overflow-hidden bg-dark-100 dark:bg-dark-950">
       {/* Mobile Backdrop */}
       {isMobileMenuOpen && (
         <div
@@ -48,31 +48,29 @@ export function ChatLayout({ user }: ChatLayoutProps) {
       <aside
         class={`
           fixed lg:relative inset-y-0 left-0 z-50 w-72 lg:w-80
-          bg-white dark:bg-dark-900 border-r border-dark-200 dark:border-dark-800
+          bg-white dark:bg-dark-900
           flex flex-col transition-transform duration-300 ease-out
           ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
         `}
       >
-        {/* Header */}
-        <div class="p-4 border-b border-dark-100 dark:border-dark-800">
-          <div class="flex items-center justify-between">
-            <div class="flex items-center gap-3">
-              <div class="w-9 h-9 rounded-xl bg-primary-500 flex-center">
-                <div class="i-carbon-chat text-white w-5 h-5" />
-              </div>
-              <span class="font-semibold text-dark-900 dark:text-white">Messages</span>
+        {/* Header - 64px to match chat header */}
+        <div class="h-16 px-4 flex items-center justify-between border-b border-dark-200 dark:border-dark-800">
+          <div class="flex items-center gap-3">
+            <div class="w-9 h-9 rounded-xl bg-primary-500 flex-center">
+              <div class="i-carbon-chat text-white w-5 h-5" />
             </div>
-            <button
-              onClick={toggleTheme}
-              class="p-2 rounded-lg text-dark-500 hover:text-dark-700 dark:text-dark-400 dark:hover:text-dark-200 hover:bg-dark-100 dark:hover:bg-dark-800 transition-colors"
-            >
-              <div class={`w-5 h-5 ${isDark ? 'i-carbon-sun' : 'i-carbon-moon'}`} />
-            </button>
+            <span class="font-semibold text-dark-900 dark:text-white">Messages</span>
           </div>
+          <button
+            onClick={toggleTheme}
+            class="p-2 rounded-lg text-dark-500 hover:text-dark-700 dark:text-dark-400 dark:hover:text-dark-200 hover:bg-dark-100 dark:hover:bg-dark-800 transition-colors"
+          >
+            <div class={`w-5 h-5 ${isDark ? 'i-carbon-sun' : 'i-carbon-moon'}`} />
+          </button>
         </div>
 
         {/* User Info */}
-        <div class="px-4 py-3 border-b border-dark-100 dark:border-dark-800">
+        <div class="px-4 py-3">
           <div class="flex items-center gap-3">
             <div class="w-10 h-10 rounded-full bg-primary-100 dark:bg-primary-900/30 flex-center text-primary-600 dark:text-primary-400 font-semibold">
               {user.displayName?.[0]?.toUpperCase() || '?'}
@@ -113,7 +111,7 @@ export function ChatLayout({ user }: ChatLayoutProps) {
         </div>
 
         {/* Logout */}
-        <div class="p-4 border-t border-dark-100 dark:border-dark-800">
+        <div class="p-4">
           <button
             onClick={logout}
             class="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-dark-600 dark:text-dark-400 hover:bg-red-50 dark:hover:bg-red-900/10 hover:text-red-600 dark:hover:text-red-400 transition-colors text-sm"
@@ -123,6 +121,9 @@ export function ChatLayout({ user }: ChatLayoutProps) {
           </button>
         </div>
       </aside>
+
+      {/* Divider between sidebar and main */}
+      <div class="hidden lg:block w-px bg-dark-200 dark:bg-dark-800" />
 
       {/* Main Content */}
       <main class="flex-1 flex flex-col min-w-0 h-full bg-white dark:bg-dark-900">

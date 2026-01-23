@@ -47,7 +47,7 @@ export function ChatScreen({ conversationId, token, currentUserId, currentUserPu
   }
 
   return (
-    <div class="flex-1 flex flex-col h-full min-h-0 bg-dark-50 dark:bg-dark-950">
+    <div class="flex-1 flex flex-col h-full min-h-0 bg-dark-100 dark:bg-dark-950">
       {/* Header */}
       <header class="h-16 px-4 border-b border-dark-200 dark:border-dark-800 flex items-center justify-between bg-white dark:bg-dark-900 flex-shrink-0">
         <div class="flex items-center gap-3 min-w-0 flex-1">
@@ -116,7 +116,7 @@ export function ChatScreen({ conversationId, token, currentUserId, currentUserPu
       </header>
 
       {/* Messages */}
-      <div class="flex-1 min-h-0 overflow-hidden">
+      <div class="flex-1 min-h-0 overflow-hidden bg-dark-100 dark:bg-dark-950">
         <MessageList
           messages={messagesData.messages}
           currentUserId={currentUserId}

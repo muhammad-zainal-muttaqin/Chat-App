@@ -67,8 +67,8 @@ export function MessageInput({ conversationId, recipientPublicKey, token, onMess
 
   if (!recipientPublicKey) {
     return (
-      <div class="p-4 border-t border-dark-200 dark:border-dark-800 bg-white dark:bg-dark-900">
-        <div class="flex items-center justify-center gap-2 text-dark-500 text-sm">
+      <div class="p-4">
+        <div class="flex items-center justify-center gap-2 text-dark-500 text-sm max-w-3xl mx-auto px-5 py-3 rounded-full bg-white dark:bg-dark-800 shadow-lg shadow-black/5 dark:shadow-black/20">
           <div class="i-carbon-warning w-5 h-5" />
           <span>Recipient key unavailable</span>
         </div>
@@ -76,31 +76,30 @@ export function MessageInput({ conversationId, recipientPublicKey, token, onMess
     );
   }
 
+  const isButtonActive = message.trim() && hasKeys;
+
   return (
-    <div class="p-4 border-t border-dark-200 dark:border-dark-800 bg-white dark:bg-dark-900 flex-shrink-0">
+    <div class="p-4 flex-shrink-0">
       <form onSubmit={handleSubmit} class="flex items-center gap-3 max-w-3xl mx-auto">
-        <div class="flex-1">
-          <input
-            type="text"
-            value={message}
-            onInput={(e) => setMessage((e.target as HTMLInputElement).value)}
-            onKeyDown={handleKeyDown}
-            class="w-full px-4 py-3 rounded-full border border-dark-200 dark:border-dark-700 bg-dark-50 dark:bg-dark-800 text-dark-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500/30 focus:border-primary-500 transition-all text-sm placeholder-dark-400"
-            placeholder="Type a message..."
-            disabled={isSending}
-          />
-        </div>
+        <input
+          type="text"
+          value={message}
+          onInput={(e) => setMessage((e.target as HTMLInputElement).value)}
+          onKeyDown={handleKeyDown}
+          class="flex-1 px-5 py-3 rounded-full bg-white dark:bg-dark-800 text-dark-900 dark:text-white focus:outline-none shadow-lg shadow-black/5 dark:shadow-black/20 text-sm placeholder-dark-400 border-0"
+          placeholder="Type a message..."
+          disabled={isSending}
+        />
 
         <button
           type="submit"
-          disabled={!message.trim() || isSending || !hasKeys}
-          class={`
-            w-11 h-11 rounded-full flex items-center justify-center transition-all duration-200 flex-shrink-0
-            ${message.trim() && hasKeys
-              ? 'bg-primary-500 text-white hover:bg-primary-600 shadow-lg shadow-primary-500/30'
+          disabled={!isButtonActive || isSending}
+          class={`w-11 h-11 rounded-full flex items-center justify-center transition-all duration-200 flex-shrink-0 ${
+            isButtonActive
+              ? 'bg-primary-600 text-white hover:bg-primary-700 dark:bg-primary-500 dark:hover:bg-primary-400 shadow-lg shadow-primary-600/50 dark:shadow-primary-500/60 ring-2 ring-primary-600/30 dark:ring-primary-500/30'
               : 'bg-dark-200 dark:bg-dark-700 text-dark-400 cursor-not-allowed'
-            }
-          `}
+          }`}
+          style={isButtonActive ? { backgroundColor: '#2563eb' } : undefined}
         >
           {isSending ? (
             <div class="i-carbon-circle-dash w-5 h-5 animate-spin" />
