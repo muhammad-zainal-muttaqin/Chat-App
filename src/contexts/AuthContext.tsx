@@ -104,7 +104,8 @@ export function AuthProvider({ children }: { children: preact.ComponentChildren 
 
         return { success: true };
       } catch (error: any) {
-        return { success: false, error: error.message || 'Login failed' };
+        console.error('Login error:', error);
+        return { success: false, error: error.message || 'Login gagal. Periksa email dan password Anda.' };
       }
     },
     [loginMutation, updatePublicKeyMutation]

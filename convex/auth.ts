@@ -81,18 +81,19 @@ export const login = mutation({
     password: v.string(),
   },
   handler: async (ctx, args) => {
+    const emailLower = args.email.toLowerCase().trim();
     const user = await ctx.db
       .query('users')
-      .withIndex('by_email', q => q.eq('email', args.email.toLowerCase()))
+      .withIndex('by_email', q => q.eq('email', emailLower))
       .first();
 
     if (!user) {
-      throw new Error('Invalid email or password');
+      throw new Error('Email tidak terdaftar. Silakan daftar terlebih dahulu.');
     }
 
     const passwordHash = await hashPassword(args.password);
     if (passwordHash !== user.passwordHash) {
-      throw new Error('Invalid email or password');
+      throw new Error('Password salah. Silakan coba lagi.');
     }
 
     // Create new session
