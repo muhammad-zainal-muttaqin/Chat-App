@@ -127,6 +127,7 @@ export default defineSchema({
     conversationId: v.id("conversations"),
     senderId: v.id("users"),
     ciphertext: v.union(v.string(), v.null()),  // Base64, null when deleted
+    ciphertextSelf: v.union(v.string(), v.null()), // Encrypted for sender (self)
     nonce: v.string(),                           // Base64 nonce
     isDeleted: v.boolean(),
     editedAt: v.union(v.number(), v.null()),    // Timestamp, null if never edited

@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(bun --version:*)",
+      "Bash(bun install:*)",
+      "Bash(npx convex dev --once)",
+      "Bash(bunx convex dev:*)",
+      "Bash(bun run dev)"
+    ]
+  }
+}
