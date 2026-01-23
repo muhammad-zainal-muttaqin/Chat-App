@@ -1,6 +1,12 @@
 # Priva Chat
 
+[![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
+[![Live Demo](https://img.shields.io/badge/Demo-Live-brightgreen)](https://privachat.netlify.app)
+[![Open Source](https://img.shields.io/badge/Open%20Source-Yes-success)](https://github.com/muhammad-zainal-muttaqin/priva-chat)
+
 End-to-end encrypted chat application built with Preact + Convex + libsodium.js.
+
+🔒 **Privacy-first**: Your messages are encrypted end-to-end. We can't read them, even if we wanted to.
 
 ## Features
 
@@ -100,6 +106,23 @@ Connect your GitHub/GitLab repository to Netlify. The `netlify.toml` file handle
 - Deleted messages have their ciphertext permanently removed
 - Edited messages replace the ciphertext (no history)
 
+## Contributing
+
+Kami menyambut kontribusi dari komunitas! Silakan baca [CONTRIBUTING.md](CONTRIBUTING.md) untuk panduan.
+
+- 🐛 [Report Bug](https://github.com/yourusername/priva-chat/issues/new?template=bug_report.md)
+- 💡 [Request Feature](https://github.com/yourusername/priva-chat/issues/new?template=feature_request.md)
+- 📝 [Submit Pull Request](https://github.com/yourusername/priva-chat/compare)
+
+Lihat juga [Code of Conduct](CODE_OF_CONDUCT.md) dan [Security Policy](SECURITY.md).
+
 ## License
 
-AGPL-3.0
+This project is licensed under the AGPL-3.0 License - see the [LICENSE](LICENSE) file for details.
+
+## Links
+
+- 🌐 [Live Demo](https://privachat.netlify.app)
+- 📚 [Documentation](docs/)
+- 🐛 [Issue Tracker](https://github.com/yourusername/priva-chat/issues)
+- 🔒 [Security Policy](SECURITY.md)

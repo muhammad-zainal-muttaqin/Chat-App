@@ -64,7 +64,7 @@ export function MessageBubble({ message, isOwn, senderPublicKey, recipientPublic
       console.error('Decryption error:', error);
       return '[Unable to decrypt]';
     }
-  }, [message.ciphertext, message.nonce, message.isDeleted, message._id, keyPair, senderPublicKey, isOwn, decrypt, plaintextCache]);
+  }, [message.ciphertext, message.ciphertextSelf, message.nonce, message.isDeleted, message._id, keyPair, senderPublicKey, isOwn, decrypt, plaintextCache]);
 
   const handleEdit = async () => {
     if (!editText.trim() || !encrypt || !keyPair) return;

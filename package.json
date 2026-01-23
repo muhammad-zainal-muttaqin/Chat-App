@@ -1,8 +1,30 @@
 {
   "name": "priva-chat",
   "version": "1.0.0",
-  "private": true,
+  "description": "End-to-end encrypted chat application built with Preact + Convex + libsodium.js",
   "type": "module",
+  "license": "AGPL-3.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/muhammad-zainal-muttaqin/priva-chat.git"
+  },
+  "homepage": "https://privachat.netlify.app",
+  "bugs": {
+    "url": "https://github.com/muhammad-zainal-muttaqin/priva-chat/issues"
+  },
+  "keywords": [
+    "chat",
+    "messaging",
+    "encryption",
+    "e2ee",
+    "privacy",
+    "secure",
+    "preact",
+    "convex",
+    "libsodium",
+    "end-to-end-encryption"
+  ],
+  "author": "Priva Chat Contributors",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
