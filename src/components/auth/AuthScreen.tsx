@@ -23,7 +23,7 @@ export function AuthScreen() {
           <div class="inline-flex items-center justify-center w-14 h-14 bg-primary-500 rounded-2xl mb-4">
             <div class="i-carbon-chat w-7 h-7 text-white" />
           </div>
-          <h1 class="text-2xl font-bold text-dark-900 dark:text-white">Welcome</h1>
+          <h1 class="text-2xl font-bold text-dark-900 dark:text-white">Priva Chat</h1>
           <p class="text-dark-500 dark:text-dark-400 text-sm mt-1">
             Secure, encrypted messaging
           </p>

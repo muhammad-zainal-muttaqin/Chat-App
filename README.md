@@ -1,4 +1,4 @@
-# Privacy Chat
+# Priva Chat
 
 End-to-end encrypted chat application built with Preact + Convex + libsodium.js.
 
