@@ -11,6 +11,7 @@ dist/
 
 # Convex
 .convex/
+_generated/
 
 # IDE
 .vscode/
@@ -28,3 +29,6 @@ npm-debug.log*
 
 # TypeScript
 *.tsbuildinfo
+
+# Other
+.claude/

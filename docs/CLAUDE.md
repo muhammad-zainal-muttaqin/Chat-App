@@ -12,8 +12,8 @@ Privacy-first, ultra-lightweight chat application with E2E encryption. **Zero in
 
 ## Key Documents
 
-- `MVP_LEAN.md` - **Read this first** - Architecture, schema, timeline
-- `CHAT_APP_REQUIREMENTS.md` - Full requirements (reference only)
+- `docs/MVP_LEAN.md` - **Read this first** - Architecture, schema, timeline
+- `docs/CHAT_APP_REQUIREMENTS.md` - Full requirements (reference only)
 
 ## Tech Stack (Serverless)
 
