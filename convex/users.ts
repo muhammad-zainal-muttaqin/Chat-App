@@ -115,3 +115,27 @@ export const updateProfile = mutation({
     return { success: true };
   },
 });
+
+// Update public key (for key rotation/recovery)
+export const updatePublicKey = mutation({
+  args: {
+    token: v.string(),
+    publicKey: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const session = await ctx.db
+      .query('sessions')
+      .withIndex('by_token', q => q.eq('token', args.token))
+      .first();
+
+    if (!session || session.expiresAt < Date.now()) {
+      throw new Error('Not authenticated');
+    }
+
+    await ctx.db.patch(session.userId, {
+      publicKey: args.publicKey,
+    });
+
+    return { success: true };
+  },
+});

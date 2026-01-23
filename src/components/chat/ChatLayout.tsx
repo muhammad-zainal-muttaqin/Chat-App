@@ -1,4 +1,6 @@
-import { useState } from 'preact/hooks';
+import { useState, useEffect } from 'preact/hooks';
+import { useMutation } from 'convex/react';
+import { api } from '../../../convex/_generated/api';
 import { Id } from '../../../convex/_generated/dataModel';
 import { ConversationList } from './ConversationList';
 import { ChatScreen } from './ChatScreen';
@@ -23,6 +25,18 @@ export function ChatLayout({ user }: ChatLayoutProps) {
   const [selectedConversationId, setSelectedConversationId] = useState<Id<'conversations'> | null>(null);
   const [showNewChat, setShowNewChat] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+  const updatePublicKey = useMutation(api.users.updatePublicKey);
+
+  // Sync public key if local key differs from server key (e.g. after clearing storage)
+  useEffect(() => {
+    if (user && keyPair && user.publicKey !== keyPair.publicKey && token) {
+      console.log('Syncing public key to server...', { server: user.publicKey, local: keyPair.publicKey });
+      updatePublicKey({ token, publicKey: keyPair.publicKey })
+        .then(() => console.log('Public key synced successfully'))
+        .catch(err => console.error('Failed to sync public key:', err));
+    }
+  }, [user?.publicKey, keyPair?.publicKey, token, updatePublicKey]);
 
   const handleSelectConversation = (conversationId: Id<'conversations'>) => {
     setSelectedConversationId(conversationId);
