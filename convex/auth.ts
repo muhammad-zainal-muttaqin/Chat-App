@@ -36,6 +36,12 @@ export const register = mutation({
       throw new Error('Email already registered');
     }
 
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(args.email)) {
+      throw new Error('Invalid email format');
+    }
+
     // Validate password strength
     if (args.password.length < 8) {
       throw new Error('Password must be at least 8 characters');

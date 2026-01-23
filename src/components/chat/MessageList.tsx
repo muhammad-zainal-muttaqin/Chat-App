@@ -40,45 +40,54 @@ export function MessageList({ messages, currentUserId, otherUserPublicKey, curre
   return (
     <div
       ref={containerRef}
-      class="flex-1 overflow-y-auto p-4 space-y-2"
+      class="h-full overflow-y-auto overflow-x-hidden custom-scrollbar"
     >
-      {sortedMessages.length === 0 ? (
-        <div class="flex items-center justify-center h-full text-dark-400 text-sm">
-          <div class="text-center">
-            <span class="i-carbon-locked text-4xl mb-2 block opacity-50" />
-            <p>Start your encrypted conversation</p>
-          </div>
-        </div>
-      ) : (
-        sortedMessages.map((message, index) => {
-          const isOwn = message.senderId === currentUserId;
-          const showDate = shouldShowDate(
-            sortedMessages[index - 1]?.createdAt,
-            message.createdAt
-          );
-
-          return (
-            <div key={message._id}>
-              {showDate && (
-                <div class="flex justify-center my-4">
-                  <span class="px-3 py-1 bg-dark-100 rounded-full text-xs text-dark-500">
-                    {formatDate(message.createdAt)}
-                  </span>
+      <div class="max-w-4xl mx-auto px-4 lg:px-6 py-4 lg:py-6">
+        <div class="space-y-3">
+          {sortedMessages.length === 0 ? (
+            <div class="flex items-center justify-center h-full min-h-[400px] text-dark-400 dark:text-dark-500 text-sm">
+              <div class="text-center p-8">
+                <div class="w-16 h-16 bg-primary-100 dark:bg-primary-900/20 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                  <span class="i-carbon-locked text-3xl text-primary-500 dark:text-primary-400 opacity-80" />
                 </div>
-              )}
-              <MessageBubble
-                message={message}
-                isOwn={isOwn}
-                senderPublicKey={isOwn ? currentUserPublicKey : otherUserPublicKey}
-                recipientPublicKey={isOwn ? otherUserPublicKey : currentUserPublicKey}
-                token={token}
-                plaintextCache={plaintextCache}
-              />
+                <p class="font-medium">No messages yet</p>
+                <p class="text-xs mt-1 opacity-70">Send a message to start this encrypted chat</p>
+              </div>
             </div>
-          );
-        })
-      )}
-      <div ref={bottomRef} />
+          ) : (
+            <>
+              {sortedMessages.map((message, index) => {
+                const isOwn = message.senderId === currentUserId;
+                const showDate = shouldShowDate(
+                  sortedMessages[index - 1]?.createdAt,
+                  message.createdAt
+                );
+
+                return (
+                  <div key={message._id} class="w-full">
+                    {showDate && (
+                      <div class="flex justify-center my-4 lg:my-6">
+                        <span class="px-4 py-1.5 bg-dark-100 dark:bg-dark-800 rounded-full text-[11px] font-medium text-dark-500 dark:text-dark-400 shadow-sm border border-dark-200/50 dark:border-dark-700/50">
+                          {formatDate(message.createdAt)}
+                        </span>
+                      </div>
+                    )}
+                    <MessageBubble
+                      message={message}
+                      isOwn={isOwn}
+                      senderPublicKey={isOwn ? currentUserPublicKey : otherUserPublicKey}
+                      recipientPublicKey={isOwn ? otherUserPublicKey : currentUserPublicKey}
+                      token={token}
+                      plaintextCache={plaintextCache}
+                    />
+                  </div>
+                );
+              })}
+              <div ref={bottomRef} class="h-4 lg:h-6" />
+            </>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

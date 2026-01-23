@@ -24,10 +24,15 @@ export function App() {
   // Loading crypto
   if (!cryptoReady) {
     return (
-      <div class="min-h-screen flex items-center justify-center bg-dark-50">
-        <div class="text-center">
-          <span class="i-carbon-locked text-4xl text-primary-600 mb-4 block animate-pulse" />
-          <div class="text-dark-500">Initializing encryption...</div>
+      <div class="min-h-screen flex items-center justify-center bg-white dark:bg-dark-950">
+        <div class="text-center animate-fade-in">
+          <div class="relative w-20 h-20 mx-auto mb-6">
+            <div class="absolute inset-0 rounded-[2rem] bg-primary-500/10 blur-xl animate-pulse" />
+            <div class="relative w-20 h-20 rounded-[2rem] bg-gradient-to-br from-primary-500 to-primary-700 flex-center shadow-lg shadow-primary-500/20">
+              <span class="i-carbon-locked text-white text-3xl" />
+            </div>
+          </div>
+          <div class="text-[11px] font-black uppercase tracking-[0.2em] text-primary-500">Initializing Security</div>
         </div>
       </div>
     );
@@ -36,8 +41,11 @@ export function App() {
   // Loading auth state
   if (authLoading) {
     return (
-      <div class="min-h-screen flex items-center justify-center bg-dark-50">
-        <div class="text-dark-500">Loading...</div>
+      <div class="min-h-screen flex items-center justify-center bg-white dark:bg-dark-950">
+        <div class="flex flex-col items-center gap-4">
+          <div class="w-12 h-12 rounded-full border-4 border-primary-500/20 border-t-primary-500 animate-spin" />
+          <div class="text-[10px] font-bold uppercase tracking-widest text-dark-400">Verifying session...</div>
+        </div>
       </div>
     );
   }
@@ -50,8 +58,11 @@ export function App() {
   // Loading user data
   if (user === undefined) {
     return (
-      <div class="min-h-screen flex items-center justify-center bg-dark-50">
-        <span class="i-carbon-circle-dash animate-spin text-3xl text-primary-600" />
+      <div class="min-h-screen flex items-center justify-center bg-white dark:bg-dark-950">
+        <div class="flex flex-col items-center gap-4">
+          <div class="w-12 h-12 rounded-full border-4 border-primary-500/20 border-t-primary-500 animate-spin" />
+          <div class="text-[10px] font-bold uppercase tracking-widest text-dark-400">Loading Profile...</div>
+        </div>
       </div>
     );
   }

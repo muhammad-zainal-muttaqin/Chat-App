@@ -35,7 +35,6 @@ export function MessageBubble({ message, isOwn, senderPublicKey, recipientPublic
 
   const editMutation = useMutation(api.messages.edit);
   const deleteMutation = useMutation(api.messages.remove);
-  // const { encrypt } = useEncryption();
 
   // Decrypt message
   const decryptedContent = useMemo(() => {
@@ -51,22 +50,14 @@ export function MessageBubble({ message, isOwn, senderPublicKey, recipientPublic
       return '[Sender key not available]';
     }
 
-    // For messages from others, decrypt with sender's public key and our private key
-    // Note: We cannot decrypt our own sent messages because they were encrypted
-    // with the recipient's public key. The plaintext should be stored temporarily
-    // when sending (handled in MessageInput component).
     try {
       if (isOwn) {
-        // Check if we have plaintext cached for this message
         if (plaintextCache && plaintextCache.has(message._id)) {
           return plaintextCache.get(message._id)!;
         }
 
-        // Try to decrypt self-encrypted copy if available
         if (message.ciphertextSelf && keyPair) {
           try {
-            // Decrypt: sender=me, recipient=me
-            // public key = my public key, private key = my private key
             const decrypted = decrypt(message.ciphertextSelf, message.nonce, keyPair.publicKey);
             if (decrypted) return decrypted;
           } catch (e) {
@@ -76,7 +67,6 @@ export function MessageBubble({ message, isOwn, senderPublicKey, recipientPublic
 
         return '[Encrypted message]';
       } else {
-        // Decrypt message from sender using sender's public key and our private key
         const decrypted = decrypt(message.ciphertext, message.nonce, senderPublicKey);
         if (!decrypted) {
           console.error('Decryption returned null - check keys');
@@ -93,14 +83,12 @@ export function MessageBubble({ message, isOwn, senderPublicKey, recipientPublic
   const handleEdit = async () => {
     if (!editText.trim() || !encrypt || !keyPair) return;
 
-    // 1. Encrypt for Recipient
     const encryptedForRecipient = encrypt(editText.trim(), recipientPublicKey);
     if (!encryptedForRecipient) {
       console.error('Failed to encrypt edit for recipient');
       return;
     }
 
-    // 2. Encrypt for Self (using SAME nonce)
     const encryptedForSelf = encrypt(editText.trim(), keyPair.publicKey, encryptedForRecipient.nonce);
     if (!encryptedForSelf) {
       console.error('Failed to encrypt edit for self');
@@ -137,123 +125,139 @@ export function MessageBubble({ message, isOwn, senderPublicKey, recipientPublic
     (Date.now() - message.createdAt) < 24 * 60 * 60 * 1000;
 
   return (
-    <div class={`flex ${isOwn ? 'justify-end' : 'justify-start'}`}>
+    <div class={`flex ${isOwn ? 'justify-end' : 'justify-start'} animate-fade-in duration-300 w-full px-1`}>
       <div
         class={`
-          relative group max-w-[80%] sm:max-w-[70%]
-          ${isOwn ? 'order-2' : ''}
+          relative group max-w-[85%] sm:max-w-[75%] lg:max-w-[65%] xl:max-w-[60%] flex flex-col
+          ${isOwn ? 'items-end' : 'items-start'}
         `}
       >
         {/* Message bubble */}
         <div
           class={`
-            px-4 py-2 rounded-2xl
+            px-4 lg:px-5 py-2.5 lg:py-3 rounded-[20px] shadow-premium relative flex items-center
             ${isOwn
-              ? 'bg-primary-600 text-white rounded-br-md'
-              : 'bg-white border border-dark-200 text-dark-900 rounded-bl-md'
+              ? 'bg-gradient-to-br from-primary-500 to-primary-600 text-white rounded-tr-none'
+              : 'bg-white dark:bg-dark-800 border border-dark-200/50 dark:border-white/5 text-dark-900 dark:text-dark-100 rounded-tl-none'
             }
             ${message.isDeleted ? 'italic opacity-60' : ''}
+            transition-all duration-300 hover:shadow-lg
           `}
         >
           {message.isDeleted ? (
-            <span class="text-sm">Message deleted</span>
+            <div class="flex items-center gap-2 text-sm w-full">
+              <span class="i-carbon-trash-can opacity-70" />
+              <span>This message was deleted</span>
+            </div>
           ) : isEditing ? (
-            <div class="space-y-2">
+            <div class="min-w-[200px] flex flex-col gap-3 w-full">
               <input
                 type="text"
                 value={editText}
                 onInput={(e) => setEditText((e.target as HTMLInputElement).value)}
-                class="w-full px-2 py-1 rounded bg-white/20 text-inherit placeholder-white/50 focus:outline-none"
+                class="w-full px-3 py-2 rounded-xl bg-black/10 dark:bg-white/10 text-inherit placeholder-white/50 focus:outline-none focus:ring-1 focus:ring-white/30"
                 placeholder="Edit message..."
                 autoFocus
               />
               <div class="flex gap-2 justify-end">
                 <button
                   onClick={() => setIsEditing(false)}
-                  class="text-xs opacity-70 hover:opacity-100"
+                  class="px-3 py-1.5 rounded-lg text-xs font-semibold hover:bg-black/10 transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={handleEdit}
-                  class="text-xs font-medium"
+                  class="px-3 py-1.5 rounded-lg text-xs font-bold bg-white text-primary-600 shadow-sm transition-transform active:scale-95"
                 >
                   Save
                 </button>
               </div>
             </div>
           ) : (
-            <p class="text-sm whitespace-pre-wrap break-words">
+            <p class="text-[15px] lg:text-[16px] leading-[1.5] whitespace-pre-wrap break-words font-semibold w-full">
               {decryptedContent || '[Encrypted message]'}
             </p>
           )}
-        </div>
 
-        {/* Meta info */}
-        <div
-          class={`
-            flex items-center gap-1 mt-1 text-xs text-dark-400
-            ${isOwn ? 'justify-end' : 'justify-start'}
-          `}
-        >
-          <span>{formatTime(message.createdAt)}</span>
-          {message.editedAt && <span>· edited</span>}
-          {isOwn && !message.isDeleted && (
-            <span class="ml-1">
-              {message.readAt ? (
-                <span class="text-primary-500">✓✓</span>
-              ) : message.deliveredAt ? (
-                <span>✓✓</span>
-              ) : (
-                <span>✓</span>
-              )}
-            </span>
+          {/* Context menu trigger (desktop) */}
+          {isOwn && !message.isDeleted && !isEditing && (
+            <button
+              onClick={() => setShowMenu(!showMenu)}
+              class="absolute -left-10 top-1/2 -translate-y-1/2 p-2 opacity-0 group-hover:opacity-100 text-dark-400 hover:text-primary-600 dark:hover:text-primary-400 transition-all duration-300 hidden sm:block"
+            >
+              <span class="i-carbon-overflow-menu-vertical text-xl" />
+            </button>
           )}
         </div>
 
-        {/* Context menu (own messages only) */}
-        {isOwn && !message.isDeleted && (
-          <div class="absolute top-0 right-full mr-1 opacity-0 group-hover:opacity-100 transition-opacity">
-            <div class="relative">
-              <button
-                onClick={() => setShowMenu(!showMenu)}
-                class="p-1 text-dark-400 hover:text-dark-600 hover:bg-dark-100 rounded"
-              >
-                <span class="i-carbon-overflow-menu-vertical" />
-              </button>
-
-              {showMenu && (
-                <>
-                  <div
-                    class="fixed inset-0 z-10"
-                    onClick={() => setShowMenu(false)}
-                  />
-                  <div class="absolute right-0 top-full mt-1 z-20 bg-white rounded-lg shadow-lg border border-dark-200 py-1 min-w-[120px]">
-                    {canEdit && (
-                      <button
-                        onClick={() => {
-                          setEditText(decryptedContent || '');
-                          setIsEditing(true);
-                          setShowMenu(false);
-                        }}
-                        class="w-full px-3 py-2 text-left text-sm hover:bg-dark-50 flex items-center gap-2"
-                      >
-                        <span class="i-carbon-edit" />
-                        Edit
-                      </button>
-                    )}
-                    <button
-                      onClick={handleDelete}
-                      class="w-full px-3 py-2 text-left text-sm hover:bg-dark-50 text-red-600 flex items-center gap-2"
-                    >
-                      <span class="i-carbon-trash-can" />
-                      Delete
-                    </button>
-                  </div>
-                </>
+        {/* Meta info & Status */}
+        <div
+          class={`
+            flex items-center gap-2 mt-1 px-1
+            ${isOwn ? 'text-primary-500/70' : 'text-dark-500/60 dark:text-dark-500/70'}
+          `}
+        >
+          <span class="text-[11px] font-medium tracking-normal uppercase opacity-75">
+            {formatTime(message.createdAt)}
+          </span>
+          {message.editedAt && (
+            <span class="flex items-center gap-1 text-[10px] font-medium opacity-70">
+              <span class="w-1 h-1 rounded-full bg-current" />
+              Edited
+            </span>
+          )}
+          {isOwn && !message.isDeleted && (
+            <div class="flex items-center ml-1 flex-shrink-0">
+              {message.readAt ? (
+                <div class="flex items-center -space-x-0.5">
+                  <span class="i-carbon-checkmark text-primary-500 text-xs opacity-90" />
+                  <span class="i-carbon-checkmark text-primary-500 text-xs opacity-90" />
+                </div>
+              ) : message.deliveredAt ? (
+                <div class="flex items-center -space-x-0.5 opacity-60">
+                  <span class="i-carbon-checkmark text-xs" />
+                  <span class="i-carbon-checkmark text-xs" />
+                </div>
+              ) : (
+                <span class="i-carbon-checkmark opacity-50 text-xs" />
               )}
             </div>
-          </div>
+          )}
+        </div>
+
+        {/* Menu (mobile & desktop) */}
+        {showMenu && isOwn && !message.isDeleted && (
+          <>
+            <div
+              class="fixed inset-0 z-40 bg-black/5 dark:bg-black/20 backdrop-blur-[2px]"
+              onClick={() => setShowMenu(false)}
+            />
+            <div class="absolute right-0 bottom-full mb-2 z-50 min-w-[160px] animate-fade-in">
+              <div class="glass-card shadow-2xl border border-white/20 dark:border-white/10 py-1.5 overflow-hidden">
+                {canEdit && (
+                  <button
+                    onClick={() => {
+                      setEditText(decryptedContent || '');
+                      setIsEditing(true);
+                      setShowMenu(false);
+                    }}
+                    class="w-full px-4 py-3 text-left text-sm hover:bg-dark-50 dark:hover:bg-white/10 text-dark-700 dark:text-dark-200 flex items-center gap-3 transition-colors"
+                  >
+                    <span class="i-carbon-edit text-lg text-primary-500" />
+                    <span class="font-semibold">Edit Message</span>
+                  </button>
+                )}
+                <button
+                  onClick={handleDelete}
+                  class="w-full px-4 py-3 text-left text-sm hover:bg-red-50 dark:hover:bg-red-500/10 text-red-600 dark:text-red-400 flex items-center gap-3 transition-colors"
+                >
+                  <span class="i-carbon-trash-can text-lg" />
+                  <span class="font-semibold">Delete</span>
+                </button>
+              </div>
+            </div>
+          </>
         )}
       </div>
     </div>

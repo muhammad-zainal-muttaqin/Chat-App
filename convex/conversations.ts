@@ -225,3 +225,38 @@ export const getMessages = query({
     };
   },
 });
+
+// Delete a conversation and all its messages
+export const deleteConversation = mutation({
+  args: {
+    token: v.string(),
+    conversationId: v.id('conversations'),
+  },
+  handler: async (ctx, args) => {
+    const userId = await getCurrentUserId(ctx, args.token);
+
+    const conversation = await ctx.db.get(args.conversationId);
+    if (!conversation) {
+      throw new Error('Conversation not found');
+    }
+
+    if (!conversation.participantIds.includes(userId)) {
+      throw new Error('Not authorized to delete this conversation');
+    }
+
+    // Delete all messages in the conversation
+    const messages = await ctx.db
+      .query('messages')
+      .withIndex('by_conversation', q => q.eq('conversationId', args.conversationId))
+      .collect();
+
+    for (const message of messages) {
+      await ctx.db.delete(message._id);
+    }
+
+    // Delete the conversation itself
+    await ctx.db.delete(args.conversationId);
+
+    return { success: true };
+  },
+});

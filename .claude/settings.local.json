@@ -5,7 +5,12 @@
       "Bash(bun install:*)",
       "Bash(npx convex dev --once)",
       "Bash(bunx convex dev:*)",
-      "Bash(bun run dev)"
+      "Bash(bun run dev)",
+      "Bash(npm run build:*)",
+      "Bash(bun run build)",
+      "Bash(bun add:*)",
+      "Bash(bun remove:*)",
+      "Bash(git add:*)"
     ]
   }
 }
