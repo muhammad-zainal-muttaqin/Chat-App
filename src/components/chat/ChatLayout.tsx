@@ -99,8 +99,8 @@ export function ChatLayout({ user }: ChatLayoutProps) {
                 {user.displayName || 'User'}
               </p>
               <p class="text-xs text-dark-500 dark:text-dark-400 flex items-center gap-1.5">
-                <span class={`w-1.5 h-1.5 rounded-full ${isUserOnline(user as any) ? 'bg-green-500' : 'bg-dark-400'}`} />
-                {isUserOnline(user as any) ? 'Online' : 'Offline'}
+                <span class={`w-1.5 h-1.5 rounded-full ${user.isOnline ? 'bg-green-500' : 'bg-dark-400'}`} />
+                {user.isOnline ? 'Online' : 'Offline'}
               </p>
             </div>
           </div>
