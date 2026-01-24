@@ -8,11 +8,15 @@ import { NewChatModal } from './NewChatModal';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
 
+import { isUserOnline } from '../../lib/presence';
+
 interface User {
   _id: Id<'users'>;
   email: string;
   displayName: string;
   publicKey: string;
+  lastSeenAt?: number | null;
+  isOnline?: boolean | null;
 }
 
 interface ChatLayoutProps {
@@ -95,8 +99,8 @@ export function ChatLayout({ user }: ChatLayoutProps) {
                 {user.displayName || 'User'}
               </p>
               <p class="text-xs text-dark-500 dark:text-dark-400 flex items-center gap-1.5">
-                <span class="w-1.5 h-1.5 rounded-full bg-green-500" />
-                Online
+                <span class={`w-1.5 h-1.5 rounded-full ${isUserOnline(user as any) ? 'bg-green-500' : 'bg-dark-400'}`} />
+                {isUserOnline(user as any) ? 'Online' : 'Offline'}
               </p>
             </div>
           </div>

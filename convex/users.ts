@@ -33,6 +33,8 @@ export const getMe = query({
       displayName: user.displayName,
       publicKey: user.publicKey,
       createdAt: user.createdAt,
+      lastSeenAt: user.lastSeenAt,
+      isOnline: user.isOnline,
     };
   },
 });
