@@ -11,12 +11,15 @@ export interface PresenceInfo {
  */
 export function isUserOnline(presence: any | null | undefined): boolean {
   if (!presence) return false;
-
-  // If user has NO lastSeenAt, they are definitely offline
-  if (!presence.lastSeenAt) return false;
-
-  const timeSinceLastSeen = Date.now() - presence.lastSeenAt;
   
+  // Prefer the server-calculated status if available
+  if (typeof presence.isOnline === 'boolean') {
+    return presence.isOnline;
+  }
+
+  // Fallback to client-side check (less reliable due to clock skew)
+  if (!presence.lastSeenAt) return false;
+  const timeSinceLastSeen = Date.now() - presence.lastSeenAt;
   return timeSinceLastSeen < OFFLINE_THRESHOLD;
 }
 
