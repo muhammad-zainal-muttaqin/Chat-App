@@ -8,7 +8,7 @@ import { NewChatModal } from './NewChatModal';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
 
-import { isUserOnline } from '../../lib/presence';
+import { useState, useEffect } from 'preact/hooks';
 
 interface User {
   _id: Id<'users'>;

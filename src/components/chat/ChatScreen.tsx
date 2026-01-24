@@ -4,7 +4,7 @@ import { api } from '../../../convex/_generated/api';
 import { Id } from '../../../convex/_generated/dataModel';
 import { MessageList } from './MessageList';
 import { MessageInput } from './MessageInput';
-import { isUserOnline, formatLastSeen } from '../../lib/presence';
+import { formatLastSeen } from '../../lib/presence';
 
 interface ChatScreenProps {
   conversationId: Id<'conversations'>;
