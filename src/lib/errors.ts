@@ -49,23 +49,24 @@ export function getAuthErrorMessage(error: unknown): string {
     }
   }
 
-  // 2. Handle Standard Errors (checking message property)
-  if (error instanceof Error) {
+  // 2. Handle Standard Errors and Error-like objects (checking message property)
+  const errorMessage = (error as any)?.message;
+  if (typeof errorMessage === 'string') {
     // Sometimes the message itself contains the code if not properly wrapped
-    if (error.message.includes(AuthErrors.USER_NOT_FOUND)) {
+    if (errorMessage.includes(AuthErrors.USER_NOT_FOUND)) {
       return 'Email is not registered. Please sign up first.';
     }
-    if (error.message.includes(AuthErrors.INVALID_PASSWORD)) {
+    if (errorMessage.includes(AuthErrors.INVALID_PASSWORD)) {
       return 'Incorrect email or password.';
     }
     
     // Avoid showing the generic "Server Error Called by client" or internal Convex logs
     // Example: "[CONVEX M(auth:login)] [Request ID: ...] Server Error Called by client"
     if (
-      !error.message.includes('Server Error') &&
-      !error.message.includes('CONVEX')
+      !errorMessage.includes('Server Error') &&
+      !errorMessage.includes('CONVEX')
     ) {
-      return error.message;
+      return errorMessage;
     }
   }
 
