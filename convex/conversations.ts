@@ -17,7 +17,7 @@ async function getCurrentUserId(ctx: QueryCtx | MutationCtx, token: string) {
 }
 
 // Helper to check online status (Server Side)
-const OFFLINE_THRESHOLD = 90 * 1000; // 90 seconds (reduced for snappier status)
+const OFFLINE_THRESHOLD = 5 * 1000; // 5 seconds
 
 function isOnline(lastSeenAt: number | undefined | null, isOnlineFlag: boolean | undefined | null) {
   // If explicitly offline (isOnline: false), trust it immediately

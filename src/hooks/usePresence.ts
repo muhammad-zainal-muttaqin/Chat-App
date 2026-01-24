@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'preact/hooks';
 import { useMutation } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 
-const HEARTBEAT_INTERVAL = 30_000; // 30 seconds
+const HEARTBEAT_INTERVAL = 2000; // 2 seconds (faster updates)
 
 export function usePresence(token: string | null) {
   const updatePresence = useMutation(api.users.updatePresence);

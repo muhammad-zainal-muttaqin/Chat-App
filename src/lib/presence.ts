@@ -1,5 +1,5 @@
-// Offline threshold: 5 minutes (increased to handle client-server clock skew)
-const OFFLINE_THRESHOLD = 5 * 60 * 1000;
+// Offline threshold: 5 seconds (matched with server)
+const OFFLINE_THRESHOLD = 5 * 1000;
 
 export interface PresenceInfo {
   lastSeenAt: number | null;
