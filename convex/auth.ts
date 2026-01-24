@@ -1,4 +1,4 @@
-import { v } from 'convex/values';
+import { v, ConvexError } from 'convex/values';
 import { mutation, query } from './_generated/server';
 // import { Id } from './_generated/dataModel';
 
@@ -129,11 +129,11 @@ export const login = mutation({
       .withIndex('by_email', q => q.eq('email', emailLower))
       .first();
 
-    // Use generic error message to prevent user enumeration
-    const genericError = 'Email atau password salah. Silakan coba lagi.';
+    // Generic error message removal to support specific error handling
+    // const genericError = 'Email atau password salah. Silakan coba lagi.';
 
     if (!user) {
-      throw new Error(genericError);
+      throw new ConvexError('ERR_USER_NOT_FOUND');
     }
 
     // Check password - support both old and new hash formats
@@ -152,7 +152,7 @@ export const login = mutation({
     }
 
     if (!passwordValid) {
-      throw new Error(genericError);
+      throw new ConvexError('ERR_INVALID_PASSWORD');
     }
 
     // Upgrade legacy password hash to secure PBKDF2 format

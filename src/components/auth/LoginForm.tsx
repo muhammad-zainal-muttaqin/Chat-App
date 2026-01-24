@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'preact/hooks';
 import { useAuth } from '../../contexts/AuthContext';
+import { getAuthErrorMessage } from '../../lib/errors';
 
 interface LoginFormProps {
   onSwitchToRegister: () => void;
@@ -42,7 +43,7 @@ export function LoginForm({ onSwitchToRegister }: LoginFormProps) {
       // If success, isLoading will be reset by app.tsx when redirecting
     } catch (error: unknown) {
       console.error('Login error:', error);
-      const message = error instanceof Error ? error.message : 'Login gagal. Silakan coba lagi.';
+      const message = getAuthErrorMessage(error);
       setError(message);
       setIsLoading(false);
     }
