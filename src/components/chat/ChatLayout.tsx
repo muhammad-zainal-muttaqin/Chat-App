@@ -8,6 +8,8 @@ import { NewChatModal } from './NewChatModal';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
 
+import { isUserOnline } from '../../lib/presence';
+
 interface User {
   _id: Id<'users'>;
   email: string;
@@ -76,7 +78,7 @@ export function ChatLayout({ user }: ChatLayoutProps) {
               <div class="i-carbon-chat text-white w-5 h-5" />
             </div>
             <span class="font-semibold text-dark-900 dark:text-white">Priva Chat</span>
-            <span class="text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded border border-green-200">v1.6</span>
+            <span class="text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded border border-green-200">v1.1</span>
           </div>
           <button
             onClick={toggleTheme}
@@ -97,8 +99,8 @@ export function ChatLayout({ user }: ChatLayoutProps) {
                 {user.displayName || 'User'}
               </p>
               <p class="text-xs text-dark-500 dark:text-dark-400 flex items-center gap-1.5">
-                <span class={`w-1.5 h-1.5 rounded-full ${user.isOnline ? 'bg-green-500' : 'bg-dark-400'}`} />
-                {user.isOnline ? 'Online' : 'Offline'}
+                <span class={`w-1.5 h-1.5 rounded-full ${isUserOnline(user as any) ? 'bg-green-500' : 'bg-dark-400'}`} />
+                {isUserOnline(user as any) ? 'Online' : 'Offline'}
               </p>
             </div>
           </div>

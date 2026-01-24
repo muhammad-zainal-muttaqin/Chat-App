@@ -168,21 +168,17 @@ export function AuthProvider({ children }: { children: preact.ComponentChildren 
     if (token) {
       try {
         await logoutMutation({ token });
-        // Also force delete the session data locally to be sure
-      } catch (err) {
-        console.error('Logout failed on server:', err);
+      } catch {
+        // Ignore errors on logout
       }
     }
 
-    // Clear storage immediately
+    // Clear storage
     localStorage.removeItem(TOKEN_STORAGE_KEY);
     clearKeyPair();
 
     setToken(null);
     setKeyPair(null);
-    
-    // Force reload to clear any in-memory states (like Convex query subscriptions)
-    window.location.reload();
   }, [token, logoutMutation]);
 
   return (

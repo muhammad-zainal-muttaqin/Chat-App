@@ -32,6 +32,11 @@ export function formatLastSeen(lastSeenAt: number | null | undefined): string {
   const now = Date.now();
   const diff = now - lastSeenAt;
 
+  // Within threshold = online
+  if (diff < OFFLINE_THRESHOLD) {
+    return 'Online';
+  }
+
   // Format relative time
   const minutes = Math.floor(diff / (60 * 1000));
   const hours = Math.floor(diff / (60 * 60 * 1000));

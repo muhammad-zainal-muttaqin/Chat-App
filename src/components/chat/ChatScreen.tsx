@@ -4,7 +4,7 @@ import { api } from '../../../convex/_generated/api';
 import { Id } from '../../../convex/_generated/dataModel';
 import { MessageList } from './MessageList';
 import { MessageInput } from './MessageInput';
-import { formatLastSeen } from '../../lib/presence';
+import { isUserOnline, formatLastSeen } from '../../lib/presence';
 
 interface ChatScreenProps {
   conversationId: Id<'conversations'>;
@@ -68,8 +68,8 @@ export function ChatScreen({ conversationId, token, currentUserId, currentUserPu
               {conversation.otherUser?.displayName || 'Unknown'}
             </h2>
             <p class="text-xs text-dark-500 dark:text-dark-400 flex items-center gap-1.5">
-              <span class={`w-1.5 h-1.5 rounded-full ${conversation.otherUser?.isOnline ? 'bg-green-500' : 'bg-dark-400'}`} />
-              {conversation.otherUser?.isOnline ? 'Online' : formatLastSeen(conversation.otherUser?.lastSeenAt)}
+              <span class={`w-1.5 h-1.5 rounded-full ${isUserOnline(conversation.otherUser) ? 'bg-green-500' : 'bg-dark-400'}`} />
+              {formatLastSeen(conversation.otherUser?.lastSeenAt)}
             </p>
           </div>
         </div>
