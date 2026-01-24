@@ -39,7 +39,11 @@ export function getAuthErrorMessage(error: unknown): string {
       }
       // Return raw message if it's a custom string but not one of our known codes
       // But filter out the generic "Server Error" wrapper if possible
-      if (errorData !== 'Server Error Called by client') {
+      if (
+        typeof errorData === 'string' &&
+        !errorData.includes('Server Error') &&
+        !errorData.includes('CONVEX')
+      ) {
         return errorData;
       }
     }
@@ -55,8 +59,12 @@ export function getAuthErrorMessage(error: unknown): string {
       return 'Incorrect email or password.';
     }
     
-    // Avoid showing the generic "Server Error Called by client"
-    if (error.message !== 'Server Error Called by client') {
+    // Avoid showing the generic "Server Error Called by client" or internal Convex logs
+    // Example: "[CONVEX M(auth:login)] [Request ID: ...] Server Error Called by client"
+    if (
+      !error.message.includes('Server Error') &&
+      !error.message.includes('CONVEX')
+    ) {
       return error.message;
     }
   }
