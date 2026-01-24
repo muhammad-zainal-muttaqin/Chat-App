@@ -27,7 +27,8 @@
   "author": "Priva Chat Contributors",
   "scripts": {
     "dev": "vite",
-    "build": "bunx convex deploy --cmd 'bunx tsc && bunx vite build'",
+    "build": "bunx tsc && bunx vite build",
+    "deploy-convex": "bunx convex deploy",
     "preview": "vite preview"
   },
   "dependencies": {

@@ -17,9 +17,12 @@ async function getCurrentUser(ctx: QueryCtx, token: string | undefined) {
 }
 
 // Helper to check online status (Server Side)
-const OFFLINE_THRESHOLD = 5 * 60 * 1000;
+const OFFLINE_THRESHOLD = 90 * 1000; // 90 seconds (reduced for snappier status)
 
-function isOnline(lastSeenAt: number | undefined | null) {
+function isOnline(lastSeenAt: number | undefined | null, isOnlineFlag: boolean | undefined | null) {
+  // If explicitly offline (isOnline: false), trust it immediately
+  if (isOnlineFlag === false) return false;
+  
   if (!lastSeenAt) return false;
   return Date.now() - lastSeenAt < OFFLINE_THRESHOLD;
 }
@@ -42,7 +45,7 @@ export const getMe = query({
       publicKey: user.publicKey,
       createdAt: user.createdAt,
       lastSeenAt: user.lastSeenAt,
-      isOnline: isOnline(user.lastSeenAt),
+      isOnline: isOnline(user.lastSeenAt, user.isOnline),
     };
   },
 });
