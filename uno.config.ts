@@ -54,7 +54,7 @@ export default defineConfig({
   shortcuts: {
     'flex-center': 'flex items-center justify-center',
     'btn': 'px-5 py-2.5 rounded-xl font-medium transition-all duration-200 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.98] flex items-center justify-center gap-2 text-sm',
-    'btn-primary': 'btn bg-[#3b82f6] text-white hover:bg-[#2563eb] shadow-sm shadow-primary-500/25',
+    'btn-primary': 'btn !bg-blue-600 !text-white hover:!bg-blue-700',
     'btn-secondary': 'btn bg-dark-100 dark:bg-dark-800 text-dark-700 dark:text-dark-200 hover:bg-dark-200 dark:hover:bg-dark-700',
     'btn-ghost': 'btn hover:bg-dark-100 dark:hover:bg-dark-800 text-dark-600 dark:text-dark-400',
     'input-field': 'w-full px-4 py-3 rounded-xl border border-dark-200 dark:border-dark-700 bg-white dark:bg-dark-800 text-dark-900 dark:text-dark-100 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all duration-200 placeholder-dark-400 dark:placeholder-dark-500',
