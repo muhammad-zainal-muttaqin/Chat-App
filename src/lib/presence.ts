@@ -7,19 +7,16 @@ export interface PresenceInfo {
 }
 
 /**
- * Check if user is considered online based on DB status and last seen timestamp
+ * Check if user is considered online based on last seen timestamp
  */
-export function isUserOnline(presence: PresenceInfo | null | undefined): boolean {
+export function isUserOnline(presence: any | null | undefined): boolean {
   if (!presence) return false;
 
-  // If explicitly marked offline in DB, trust it
-  if (presence.isOnline === false) return false;
-
-  // If marked online, verify with timestamp to prevent "zombie" online status
-  // (e.g. if app crashed without setting offline)
+  // If user has NO lastSeenAt, they are definitely offline
   if (!presence.lastSeenAt) return false;
 
   const timeSinceLastSeen = Date.now() - presence.lastSeenAt;
+  
   return timeSinceLastSeen < OFFLINE_THRESHOLD;
 }
 
