@@ -78,7 +78,7 @@ export function ChatLayout({ user }: ChatLayoutProps) {
               <div class="i-carbon-chat text-white w-5 h-5" />
             </div>
             <span class="font-semibold text-dark-900 dark:text-white">Priva Chat</span>
-            <span class="text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded border border-green-200">v1.1</span>
+            <span class="text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded border border-green-200">v1.6</span>
           </div>
           <button
             onClick={toggleTheme}
