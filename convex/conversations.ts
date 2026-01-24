@@ -16,6 +16,14 @@ async function getCurrentUserId(ctx: QueryCtx | MutationCtx, token: string) {
   return session.userId;
 }
 
+// Helper to check online status (Server Side)
+const OFFLINE_THRESHOLD = 5 * 60 * 1000;
+
+function isOnline(lastSeenAt: number | undefined | null) {
+  if (!lastSeenAt) return false;
+  return Date.now() - lastSeenAt < OFFLINE_THRESHOLD;
+}
+
 // List all conversations for current user
 export const list = query({
   args: {
