@@ -63,6 +63,7 @@ export const register = mutation({
     displayName: v.string(),
     publicKey: v.string(),
     encryptedPrivateKey: v.optional(v.string()), // Accept encrypted private key
+    deviceId: v.string(), // Unique device identifier to prevent session hijacking
   },
   handler: async (ctx, args) => {
     // Check if email exists
@@ -115,13 +116,14 @@ export const register = mutation({
       createdAt: Date.now(),
     });
 
-    // Create session
+    // Create session with device binding
     const token = generateToken();
     const expiresAt = Date.now() + 7 * 24 * 60 * 60 * 1000; // 7 days (more secure)
 
     await ctx.db.insert('sessions', {
       userId,
       token,
+      deviceId: args.deviceId, // Bind session to this device
       expiresAt,
       createdAt: Date.now(),
     });
@@ -135,6 +137,7 @@ export const login = mutation({
   args: {
     email: v.string(),
     password: v.string(),
+    deviceId: v.string(), // Unique device identifier to prevent session hijacking
   },
   handler: async (ctx, args) => {
     const emailLower = args.email.toLowerCase().trim();
@@ -179,13 +182,14 @@ export const login = mutation({
       });
     }
 
-    // Create new session
+    // Create new session with device binding
     const token = generateToken();
     const expiresAt = Date.now() + 7 * 24 * 60 * 60 * 1000; // 7 days (more secure)
 
     await ctx.db.insert('sessions', {
       userId: user._id,
       token,
+      deviceId: args.deviceId, // Bind session to this device
       expiresAt,
       createdAt: Date.now(),
     });
@@ -222,6 +226,7 @@ export const logout = mutation({
 export const validateSession = query({
   args: {
     token: v.string(),
+    deviceId: v.string(), // Must match the device that created the session
   },
   handler: async (ctx, args) => {
     if (!args.token) return null;
@@ -233,6 +238,16 @@ export const validateSession = query({
 
     if (!session) return null;
     if (session.expiresAt < Date.now()) return null;
+
+    // SECURITY: Validate device ID to prevent session hijacking
+    // If someone copies the token to another device, this check will fail
+    if (session.deviceId !== args.deviceId) {
+      console.error('SECURITY: Session device mismatch - possible session hijacking', {
+        sessionDeviceId: session.deviceId.substring(0, 10) + '...',
+        requestDeviceId: args.deviceId.substring(0, 10) + '...',
+      });
+      return null;
+    }
 
     return session.userId;
   },

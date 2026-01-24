@@ -10,6 +10,7 @@ import {
   KeyPair,
   encryptPrivateKeyWithPassword,
   decryptPrivateKeyWithPassword,
+  getOrCreateDeviceId,
 } from '../lib/crypto';
 
 // Login result with possible warnings
@@ -67,12 +68,16 @@ export function AuthProvider({ children }: { children: preact.ComponentChildren 
         // Encrypt private key with password
         const encryptedPrivateKey = await encryptPrivateKeyWithPassword(newKeyPair.privateKey, password);
 
+        // Get or create device ID for session binding (prevents session hijacking)
+        const deviceId = getOrCreateDeviceId();
+
         const result = await registerMutation({
           email,
           password,
           displayName,
           publicKey: newKeyPair.publicKey,
           encryptedPrivateKey,
+          deviceId,
         });
 
         // Store token and keys
@@ -95,7 +100,10 @@ export function AuthProvider({ children }: { children: preact.ComponentChildren 
   const login = useCallback(
     async (email: string, password: string, forceGenerateNewKeys?: boolean): Promise<LoginResult> => {
       try {
-        const result = await loginMutation({ email, password });
+        // Get or create device ID for session binding (prevents session hijacking)
+        const deviceId = getOrCreateDeviceId();
+
+        const result = await loginMutation({ email, password, deviceId });
 
         // Type the response properly
         const authResponse = result as {

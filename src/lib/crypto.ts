@@ -128,6 +128,36 @@ export function clearKeyPair(): void {
   localStorage.removeItem(PUBLIC_KEY_STORAGE_KEY);
 }
 
+// Device ID for session binding (prevents session hijacking)
+const DEVICE_ID_STORAGE_KEY = 'privacy_chat_device_id';
+
+// Generate a unique device ID
+function generateDeviceId(): string {
+  const array = new Uint8Array(32);
+  crypto.getRandomValues(array);
+  return Array.from(array, b => b.toString(16).padStart(2, '0')).join('');
+}
+
+// Get or create device ID (persists across sessions on same device)
+export function getOrCreateDeviceId(): string {
+  let deviceId = localStorage.getItem(DEVICE_ID_STORAGE_KEY);
+  if (!deviceId) {
+    deviceId = generateDeviceId();
+    localStorage.setItem(DEVICE_ID_STORAGE_KEY, deviceId);
+  }
+  return deviceId;
+}
+
+// Get current device ID (returns null if not set)
+export function getDeviceId(): string | null {
+  return localStorage.getItem(DEVICE_ID_STORAGE_KEY);
+}
+
+// Clear device ID (should rarely be used - only on full account reset)
+export function clearDeviceId(): void {
+  localStorage.removeItem(DEVICE_ID_STORAGE_KEY);
+}
+
 // Get or generate key pair
 export function getOrCreateKeyPair(): KeyPair {
   const existing = loadKeyPair();

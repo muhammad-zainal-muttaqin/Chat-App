@@ -2,8 +2,8 @@ import { v } from 'convex/values';
 import { query, mutation, QueryCtx } from './_generated/server';
 // import { Id } from './_generated/dataModel';
 
-// Helper to get current user from session token
-async function getCurrentUser(ctx: QueryCtx, token: string | undefined) {
+// Helper to get current user from session token with device validation
+async function getCurrentUser(ctx: QueryCtx, token: string | undefined, deviceId?: string) {
   if (!token) return null;
 
   const session = await ctx.db
@@ -12,6 +12,12 @@ async function getCurrentUser(ctx: QueryCtx, token: string | undefined) {
     .first();
 
   if (!session || session.expiresAt < Date.now()) return null;
+
+  // SECURITY: Validate device ID if provided (prevents session hijacking)
+  if (deviceId && session.deviceId !== deviceId) {
+    console.error('SECURITY: Device mismatch detected in getCurrentUser');
+    return null;
+  }
 
   return await ctx.db.get(session.userId);
 }
@@ -31,11 +37,12 @@ function isOnline(lastSeenAt: number | undefined | null, isOnlineFlag: boolean |
 export const getMe = query({
   args: {
     token: v.string(),
+    deviceId: v.optional(v.string()), // Optional for backwards compatibility, but should be provided
   },
   handler: async (ctx, args) => {
     if (!args.token) return null;
 
-    const user = await getCurrentUser(ctx, args.token);
+    const user = await getCurrentUser(ctx, args.token, args.deviceId);
     if (!user) return null;
 
     return {

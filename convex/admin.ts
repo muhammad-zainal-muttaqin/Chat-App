@@ -46,8 +46,8 @@ async function hashPasswordLegacy(password: string): Promise<string> {
     return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
-// Helper to validate session
-async function validateSession(ctx: { db: any }, token: string) {
+// Helper to validate session with device ID check
+async function validateSession(ctx: { db: any }, token: string, deviceId: string) {
     const session = await ctx.db
         .query('sessions')
         .withIndex('by_token', (q: any) => q.eq('token', token))
@@ -55,6 +55,12 @@ async function validateSession(ctx: { db: any }, token: string) {
 
     if (!session || session.expiresAt < Date.now()) {
         throw new Error('Not authenticated');
+    }
+
+    // SECURITY: Validate device ID to prevent session hijacking
+    if (session.deviceId !== deviceId) {
+        console.error('SECURITY: Session device mismatch in admin operation');
+        throw new Error('Session invalid - device mismatch');
     }
 
     return session.userId;
@@ -65,12 +71,13 @@ async function validateSession(ctx: { db: any }, token: string) {
 export const resetOwnPassword = mutation({
     args: {
         token: v.string(),
+        deviceId: v.string(), // Required for session validation
         currentPassword: v.string(),
         newPassword: v.string(),
     },
     handler: async (ctx, args) => {
-        // Validate session first
-        const userId = await validateSession(ctx, args.token);
+        // Validate session first (includes device ID check)
+        const userId = await validateSession(ctx, args.token, args.deviceId);
 
         const user = await ctx.db
             .query('users')
@@ -121,10 +128,11 @@ export const resetOwnPassword = mutation({
 export const listUsers = query({
     args: {
         token: v.string(),
+        deviceId: v.string(), // Required for session validation
     },
     handler: async (ctx, args) => {
-        // Validate session first
-        await validateSession(ctx, args.token);
+        // Validate session first (includes device ID check)
+        await validateSession(ctx, args.token, args.deviceId);
 
         const users = await ctx.db.query('users').collect();
         // Only return public display names, NOT emails
