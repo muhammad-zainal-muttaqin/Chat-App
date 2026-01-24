@@ -52,6 +52,12 @@ export const send = mutation({
       updatedAt: Date.now(),
     });
 
+    // Update sender's presence to online (since they just sent a message)
+    await ctx.db.patch(userId, {
+      lastSeenAt: Date.now(),
+      isOnline: true,
+    });
+
     return { messageId };
   },
 });

@@ -1,5 +1,5 @@
-// Offline threshold: 2 minutes (4x heartbeat interval)
-const OFFLINE_THRESHOLD = 2 * 60 * 1000;
+// Offline threshold: 5 minutes (increased to handle client-server clock skew)
+const OFFLINE_THRESHOLD = 5 * 60 * 1000;
 
 export interface PresenceInfo {
   lastSeenAt: number | null;
@@ -7,10 +7,17 @@ export interface PresenceInfo {
 }
 
 /**
- * Check if user is considered online based on last seen timestamp
+ * Check if user is considered online based on DB status and last seen timestamp
  */
 export function isUserOnline(presence: PresenceInfo | null | undefined): boolean {
-  if (!presence?.lastSeenAt) return false;
+  if (!presence) return false;
+
+  // If explicitly marked offline in DB, trust it
+  if (presence.isOnline === false) return false;
+
+  // If marked online, verify with timestamp to prevent "zombie" online status
+  // (e.g. if app crashed without setting offline)
+  if (!presence.lastSeenAt) return false;
 
   const timeSinceLastSeen = Date.now() - presence.lastSeenAt;
   return timeSinceLastSeen < OFFLINE_THRESHOLD;
