@@ -2,8 +2,46 @@ import { v } from 'convex/values';
 import { mutation, query } from './_generated/server';
 // import { Id } from './_generated/dataModel';
 
-// Simple hash function (in production, use bcrypt via action)
-async function hashPassword(password: string): Promise<string> {
+// Generate random salt for password hashing
+function generateSalt(): string {
+  const array = new Uint8Array(16);
+  crypto.getRandomValues(array);
+  return Array.from(array, b => b.toString(16).padStart(2, '0')).join('');
+}
+
+// Secure password hashing using PBKDF2 with 100,000 iterations
+async function hashPasswordWithSalt(password: string, salt: string): Promise<string> {
+  const encoder = new TextEncoder();
+  const passwordBuffer = encoder.encode(password);
+  const saltBuffer = encoder.encode(salt);
+
+  // Import password as key material
+  const keyMaterial = await crypto.subtle.importKey(
+    'raw',
+    passwordBuffer,
+    { name: 'PBKDF2' },
+    false,
+    ['deriveBits']
+  );
+
+  // Derive bits using PBKDF2 with 100,000 iterations
+  const derivedBits = await crypto.subtle.deriveBits(
+    {
+      name: 'PBKDF2',
+      salt: saltBuffer,
+      iterations: 100000,
+      hash: 'SHA-256',
+    },
+    keyMaterial,
+    256
+  );
+
+  const hashArray = Array.from(new Uint8Array(derivedBits));
+  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+// Legacy hash function for backwards compatibility with existing users
+async function hashPasswordLegacy(password: string): Promise<string> {
   const encoder = new TextEncoder();
   const data = encoder.encode(password + 'privacy-chat-salt-2024');
   const hashBuffer = await crypto.subtle.digest('SHA-256', data);
@@ -48,13 +86,15 @@ export const register = mutation({
       throw new Error('Password must be at least 8 characters');
     }
 
-    // Hash password
-    const passwordHash = await hashPassword(args.password);
+    // Generate random salt and hash password with PBKDF2
+    const passwordSalt = generateSalt();
+    const passwordHash = await hashPasswordWithSalt(args.password, passwordSalt);
 
-    // Create user
+    // Create user with secure password hash
     const userId = await ctx.db.insert('users', {
       email: args.email.toLowerCase(),
       passwordHash,
+      passwordSalt, // Store unique salt per user
       displayName: args.displayName,
       publicKey: args.publicKey,
       encryptedPrivateKey: args.encryptedPrivateKey,
@@ -63,7 +103,7 @@ export const register = mutation({
 
     // Create session
     const token = generateToken();
-    const expiresAt = Date.now() + 30 * 24 * 60 * 60 * 1000; // 30 days
+    const expiresAt = Date.now() + 7 * 24 * 60 * 60 * 1000; // 7 days (more secure)
 
     await ctx.db.insert('sessions', {
       userId,
@@ -89,18 +129,45 @@ export const login = mutation({
       .withIndex('by_email', q => q.eq('email', emailLower))
       .first();
 
+    // Use generic error message to prevent user enumeration
+    const genericError = 'Email atau password salah. Silakan coba lagi.';
+
     if (!user) {
-      throw new Error('Email tidak terdaftar. Silakan daftar terlebih dahulu.');
+      throw new Error(genericError);
     }
 
-    const passwordHash = await hashPassword(args.password);
-    if (passwordHash !== user.passwordHash) {
-      throw new Error('Password salah. Silakan coba lagi.');
+    // Check password - support both old and new hash formats
+    let passwordValid = false;
+    let needsUpgrade = false;
+
+    if (user.passwordSalt) {
+      // New secure format with unique salt (PBKDF2)
+      const passwordHash = await hashPasswordWithSalt(args.password, user.passwordSalt);
+      passwordValid = passwordHash === user.passwordHash;
+    } else {
+      // Legacy format for existing users (SHA-256 with static salt)
+      const legacyHash = await hashPasswordLegacy(args.password);
+      passwordValid = legacyHash === user.passwordHash;
+      needsUpgrade = passwordValid; // Upgrade to new format on successful login
+    }
+
+    if (!passwordValid) {
+      throw new Error(genericError);
+    }
+
+    // Upgrade legacy password hash to secure PBKDF2 format
+    if (needsUpgrade) {
+      const newSalt = generateSalt();
+      const newHash = await hashPasswordWithSalt(args.password, newSalt);
+      await ctx.db.patch(user._id, {
+        passwordHash: newHash,
+        passwordSalt: newSalt,
+      });
     }
 
     // Create new session
     const token = generateToken();
-    const expiresAt = Date.now() + 30 * 24 * 60 * 60 * 1000;
+    const expiresAt = Date.now() + 7 * 24 * 60 * 60 * 1000; // 7 days (more secure)
 
     await ctx.db.insert('sessions', {
       userId: user._id,

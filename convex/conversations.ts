@@ -65,6 +65,8 @@ export const list = query({
             _id: otherUser._id,
             displayName: otherUser.displayName,
             publicKey: otherUser.publicKey,
+            lastSeenAt: otherUser.lastSeenAt ?? null,
+            isOnline: otherUser.isOnline ?? false,
           } : null,
           lastMessage: lastMessage ? {
             _id: lastMessage._id,
@@ -158,6 +160,8 @@ export const getById = query({
         _id: otherUser._id,
         displayName: otherUser.displayName,
         publicKey: otherUser.publicKey,
+        lastSeenAt: otherUser.lastSeenAt ?? null,
+        isOnline: otherUser.isOnline ?? false,
       } : null,
       createdAt: conversation.createdAt,
     };

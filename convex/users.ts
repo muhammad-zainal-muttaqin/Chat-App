@@ -139,3 +139,49 @@ export const updatePublicKey = mutation({
     return { success: true };
   },
 });
+
+// Update user presence (heartbeat)
+export const updatePresence = mutation({
+  args: {
+    token: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const session = await ctx.db
+      .query('sessions')
+      .withIndex('by_token', q => q.eq('token', args.token))
+      .first();
+
+    if (!session || session.expiresAt < Date.now()) {
+      return { success: false };
+    }
+
+    const now = Date.now();
+    await ctx.db.patch(session.userId, {
+      lastSeenAt: now,
+      isOnline: true,
+    });
+
+    return { success: true, timestamp: now };
+  },
+});
+
+// Set user offline (explicit - for logout or tab close)
+export const setOffline = mutation({
+  args: {
+    token: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const session = await ctx.db
+      .query('sessions')
+      .withIndex('by_token', q => q.eq('token', args.token))
+      .first();
+
+    if (!session) return { success: false };
+
+    await ctx.db.patch(session.userId, {
+      isOnline: false,
+    });
+
+    return { success: true };
+  },
+});

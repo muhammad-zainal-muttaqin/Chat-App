@@ -1,5 +1,20 @@
 import { mutation } from './_generated/server';
 
+// Clear all sessions - force logout all users
+export const clearAllSessions = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const sessions = await ctx.db.query('sessions').collect();
+    for (const session of sessions) {
+      await ctx.db.delete(session._id);
+    }
+    return {
+      deleted: sessions.length,
+      message: `${sessions.length} sessions deleted. All users must login again.`,
+    };
+  },
+});
+
 // Reset database - delete all data from all tables
 export const resetDatabase = mutation({
   args: {},

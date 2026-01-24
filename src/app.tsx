@@ -5,6 +5,7 @@ import { ChatLayout } from './components/chat/ChatLayout';
 import { useAuth } from './contexts/AuthContext';
 import { useEffect, useState } from 'preact/hooks';
 import { initCrypto } from './lib/crypto';
+import { usePresence } from './hooks/usePresence';
 
 export function App() {
   const [cryptoReady, setCryptoReady] = useState(false);
@@ -20,6 +21,9 @@ export function App() {
     api.users.getMe,
     isAuthenticated && token ? { token } : 'skip'
   );
+
+  // Start presence heartbeat when authenticated
+  usePresence(isAuthenticated && token ? token : null);
 
   // Loading crypto
   if (!cryptoReady) {

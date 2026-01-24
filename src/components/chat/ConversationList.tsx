@@ -1,6 +1,7 @@
 import { useQuery } from 'convex/react';
 import { api } from '../../../convex/_generated/api';
 import { Id } from '../../../convex/_generated/dataModel';
+import { isUserOnline } from '../../lib/presence';
 
 interface ConversationListProps {
   token: string;
@@ -66,7 +67,7 @@ export function ConversationList({ token, selectedId, onSelect, currentUserId }:
               `}>
                 {(conv.otherUser?.displayName?.[0] || '?').toUpperCase()}
               </div>
-              <div class="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-green-500 border-2 border-white dark:border-dark-900 rounded-full" />
+              <div class={`absolute -bottom-0.5 -right-0.5 w-3 h-3 ${isUserOnline(conv.otherUser) ? 'bg-green-500' : 'bg-dark-400'} border-2 border-white dark:border-dark-900 rounded-full`} />
             </div>
 
             {/* Content */}
