@@ -75,6 +75,20 @@ export const register = mutation({
       throw new Error('Email already registered');
     }
 
+    // SECURITY: Check if public key is already used by another user
+    const existingKeyUser = await ctx.db
+      .query('users')
+      .withIndex('by_public_key', q => q.eq('publicKey', args.publicKey))
+      .first();
+
+    if (existingKeyUser) {
+      console.error('SECURITY: Attempt to register with duplicate public key', {
+        email: args.email,
+        existingUserId: existingKeyUser._id,
+      });
+      throw new ConvexError('ERR_DUPLICATE_PUBLIC_KEY');
+    }
+
     // Validate email format
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(args.email)) {
@@ -239,6 +253,21 @@ export const updatePublicKey = mutation({
 
     if (!session || session.expiresAt < Date.now()) {
       throw new Error('Not authenticated');
+    }
+
+    // SECURITY: Check if this public key is already used by another user
+    // This prevents key collision attacks where one user tries to use another's key
+    const existingUser = await ctx.db
+      .query('users')
+      .withIndex('by_public_key', q => q.eq('publicKey', args.publicKey))
+      .first();
+
+    if (existingUser && existingUser._id !== session.userId) {
+      console.error('SECURITY: Attempt to set duplicate public key', {
+        attemptingUserId: session.userId,
+        existingUserId: existingUser._id,
+      });
+      throw new ConvexError('ERR_DUPLICATE_PUBLIC_KEY');
     }
 
     await ctx.db.patch(session.userId, {

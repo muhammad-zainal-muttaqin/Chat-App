@@ -129,29 +129,8 @@ export const updateProfile = mutation({
   },
 });
 
-// Update public key (for key rotation/recovery)
-export const updatePublicKey = mutation({
-  args: {
-    token: v.string(),
-    publicKey: v.string(),
-  },
-  handler: async (ctx, args) => {
-    const session = await ctx.db
-      .query('sessions')
-      .withIndex('by_token', q => q.eq('token', args.token))
-      .first();
-
-    if (!session || session.expiresAt < Date.now()) {
-      throw new Error('Not authenticated');
-    }
-
-    await ctx.db.patch(session.userId, {
-      publicKey: args.publicKey,
-    });
-
-    return { success: true };
-  },
-});
+// NOTE: updatePublicKey mutation has been moved to convex/auth.ts
+// It includes encryptedPrivateKey parameter and duplicate key check for security
 
 // Update user presence (heartbeat)
 export const updatePresence = mutation({

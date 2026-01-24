@@ -8,6 +8,8 @@ interface ConvexError {
 export const AuthErrors = {
   USER_NOT_FOUND: 'ERR_USER_NOT_FOUND',
   INVALID_PASSWORD: 'ERR_INVALID_PASSWORD',
+  KEY_DECRYPT_FAILED: 'ERR_KEY_DECRYPT_FAILED',
+  DUPLICATE_PUBLIC_KEY: 'ERR_DUPLICATE_PUBLIC_KEY',
 } as const;
 
 // Type guard to check if an error is a ConvexError-like object

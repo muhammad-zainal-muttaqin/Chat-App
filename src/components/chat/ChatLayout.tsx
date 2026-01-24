@@ -1,12 +1,11 @@
 import { useState, useEffect } from 'preact/hooks';
-import { useMutation } from 'convex/react';
-import { api } from '../../../convex/_generated/api';
 import { Id } from '../../../convex/_generated/dataModel';
 import { ConversationList } from './ConversationList';
 import { ChatScreen } from './ChatScreen';
 import { NewChatModal } from './NewChatModal';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
+import { clearKeyPair } from '../../lib/crypto';
 
 import { isUserOnline } from '../../lib/presence';
 
@@ -30,17 +29,21 @@ export function ChatLayout({ user }: ChatLayoutProps) {
   const [showNewChat, setShowNewChat] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-  const updatePublicKey = useMutation(api.users.updatePublicKey);
-
-  // Sync public key if local key differs from server key (e.g. after clearing storage)
+  // SECURITY: Detect key mismatch and force re-login
+  // Server public key is the source of truth - localStorage must match
+  // If they differ, localStorage may have been tampered with or copied from another browser
   useEffect(() => {
     if (user && keyPair && user.publicKey !== keyPair.publicKey && token) {
-      console.log('Syncing public key to server...', { server: user.publicKey, local: keyPair.publicKey });
-      updatePublicKey({ token, publicKey: keyPair.publicKey })
-        .then(() => console.log('Public key synced successfully'))
-        .catch(err => console.error('Failed to sync public key:', err));
+      console.error('KEY MISMATCH DETECTED - forcing re-login for security', {
+        serverKey: user.publicKey.substring(0, 20) + '...',
+        localKey: keyPair.publicKey.substring(0, 20) + '...',
+      });
+      // Clear potentially compromised local keys and force logout
+      // On re-login, correct keys will be restored from server backup
+      clearKeyPair();
+      logout();
     }
-  }, [user?.publicKey, keyPair?.publicKey, token, updatePublicKey]);
+  }, [user?.publicKey, keyPair?.publicKey, token, logout]);
 
   const handleSelectConversation = (conversationId: Id<'conversations'>) => {
     setSelectedConversationId(conversationId);

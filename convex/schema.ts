@@ -15,7 +15,8 @@ export default defineSchema({
     lastSeenAt: v.optional(v.number()), // Timestamp of last heartbeat
     isOnline: v.optional(v.boolean()), // Online status flag
   })
-    .index('by_email', ['email']),
+    .index('by_email', ['email'])
+    .index('by_public_key', ['publicKey']), // For duplicate key check security
 
   // Sessions for auth
   sessions: defineTable({

@@ -12,13 +12,20 @@ import {
   decryptPrivateKeyWithPassword,
 } from '../lib/crypto';
 
+// Login result with possible warnings
+interface LoginResult {
+  success: boolean;
+  error?: string;
+  warning?: 'new_keys_generated'; // Warning when new keys had to be generated (old messages unreadable)
+}
+
 interface AuthContextType {
   token: string | null;
   keyPair: KeyPair | null;
   isLoading: boolean;
   isAuthenticated: boolean;
   register: (email: string, password: string, displayName: string) => Promise<{ success: boolean; error?: string }>;
-  login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
+  login: (email: string, password: string, forceGenerateNewKeys?: boolean) => Promise<LoginResult>;
   logout: () => Promise<void>;
 }
 
@@ -86,11 +93,11 @@ export function AuthProvider({ children }: { children: preact.ComponentChildren 
   );
 
   const login = useCallback(
-    async (email: string, password: string) => {
+    async (email: string, password: string, forceGenerateNewKeys?: boolean): Promise<LoginResult> => {
       try {
         const result = await loginMutation({ email, password });
 
-        // Load existing keys - type the response properly
+        // Type the response properly
         const authResponse = result as {
           userId: string;
           token: string;
@@ -98,8 +105,9 @@ export function AuthProvider({ children }: { children: preact.ComponentChildren 
           publicKey?: string;
         };
         let currentKeyPair: KeyPair | null = null;
+        let warning: 'new_keys_generated' | undefined;
 
-        // 1. Try to restore keys from server (Preferred)
+        // STEP 1: Server has keys - try to restore (SERVER IS SOURCE OF TRUTH)
         if (authResponse.encryptedPrivateKey && authResponse.publicKey) {
           try {
             console.log('Restoring encryption keys from server...');
@@ -111,50 +119,96 @@ export function AuthProvider({ children }: { children: preact.ComponentChildren 
               publicKey: authResponse.publicKey,
               privateKey,
             };
+            // IMPORTANT: Overwrite localStorage with server keys (server is source of truth)
             storeKeyPair(currentKeyPair);
+            console.log('Keys restored from server successfully');
           } catch (e) {
-            console.error('Failed to restore keys from server:', e);
+            console.error('Failed to decrypt keys from server:', e);
+
+            // If user explicitly requested new keys, generate them
+            if (forceGenerateNewKeys) {
+              console.warn('User requested new key generation - old messages will be unreadable');
+              currentKeyPair = generateKeyPair();
+              storeKeyPair(currentKeyPair);
+              warning = 'new_keys_generated';
+
+              // Backup new keys to server
+              try {
+                const encryptedPrivateKey = await encryptPrivateKeyWithPassword(currentKeyPair.privateKey, password);
+                await syncKeysMutation({
+                  token: result.token,
+                  publicKey: currentKeyPair.publicKey,
+                  encryptedPrivateKey
+                });
+              } catch (syncError) {
+                console.error('Failed to backup new keys:', syncError);
+              }
+            } else {
+              // SECURITY: Do NOT fall back to localStorage - it may belong to different account
+              // Do NOT generate new keys automatically - user must explicitly choose
+              // Return error so UI can prompt user to retry password or generate new keys
+              return {
+                success: false,
+                error: 'ERR_KEY_DECRYPT_FAILED',
+              };
+            }
           }
         }
 
-        // 2. If valid keys not found from server, check local storage
-        if (!currentKeyPair) {
-          currentKeyPair = loadKeyPair();
-        }
+        // STEP 2: Server has NO keys (new user or keys were never backed up)
+        if (!currentKeyPair && !authResponse.encryptedPrivateKey) {
+          // Check localStorage as potential recovery (only if server has no keys)
+          const localKeys = loadKeyPair();
 
-        // 3. If no keys exist (new device and no backup), generate new ones automatically
-        // NOTE: This means old messages will be unreadable, but allows immediate use on new devices
-        if (!currentKeyPair) {
-          console.warn('Generating new encryption keys for new session (old messages will be unreadable)...');
-          currentKeyPair = generateKeyPair();
-          storeKeyPair(currentKeyPair);
-        }
+          if (localKeys) {
+            console.log('Using keys from localStorage (server had no backup)');
+            currentKeyPair = localKeys;
 
-        // 4. Sync keys to server if we have them but server doesn't (or just to be safe)
-        if (currentKeyPair) {
-          try {
-            // Only sync if server didn't return keys OR if we generated new ones
-            if (!authResponse.encryptedPrivateKey || !authResponse.publicKey) {
-              console.log('Syncing keys to server for future backup...');
-              const encryptedPrivateKey = await encryptPrivateKeyWithPassword(currentKeyPair.privateKey, password);
+            // Backup to server for future logins
+            try {
+              console.log('Backing up local keys to server...');
+              const encryptedPrivateKey = await encryptPrivateKeyWithPassword(
+                currentKeyPair.privateKey,
+                password
+              );
               await syncKeysMutation({
                 token: result.token,
                 publicKey: currentKeyPair.publicKey,
                 encryptedPrivateKey
               });
+            } catch (e) {
+              console.error('Failed to backup keys to server:', e);
             }
-          } catch (e) {
-            console.error("Failed to sync keys:", e);
+          } else {
+            // No keys anywhere - generate new ones with WARNING
+            console.warn('No encryption keys found anywhere - generating new keys');
+            currentKeyPair = generateKeyPair();
+            storeKeyPair(currentKeyPair);
+            warning = 'new_keys_generated';
+
+            // Backup new keys to server
+            try {
+              const encryptedPrivateKey = await encryptPrivateKeyWithPassword(
+                currentKeyPair.privateKey,
+                password
+              );
+              await syncKeysMutation({
+                token: result.token,
+                publicKey: currentKeyPair.publicKey,
+                encryptedPrivateKey
+              });
+            } catch (e) {
+              console.error('Failed to backup new keys:', e);
+            }
           }
         }
 
-        // Store token
+        // Store token and finalize
         localStorage.setItem(TOKEN_STORAGE_KEY, result.token);
-
         setToken(result.token);
         setKeyPair(currentKeyPair);
 
-        return { success: true };
+        return { success: true, warning };
       } catch (error: unknown) {
         console.error('Login error:', error);
         const message = error instanceof Error ? error.message : 'Login gagal. Periksa email dan password Anda.';
