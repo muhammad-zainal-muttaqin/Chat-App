@@ -8,8 +8,6 @@ import { NewChatModal } from './NewChatModal';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
 
-import { useState, useEffect } from 'preact/hooks';
-
 interface User {
   _id: Id<'users'>;
   email: string;
