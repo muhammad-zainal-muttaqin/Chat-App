@@ -172,7 +172,7 @@ export const getById = query({
         displayName: otherUser.displayName,
         publicKey: otherUser.publicKey,
         lastSeenAt: otherUser.lastSeenAt ?? null,
-        isOnline: isOnline(otherUser.lastSeenAt),
+        isOnline: isOnline(otherUser.lastSeenAt, otherUser.isOnline),
       } : null,
       createdAt: conversation.createdAt,
     };
