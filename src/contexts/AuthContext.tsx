@@ -13,6 +13,7 @@ import {
   decryptPrivateKeyWithPassword,
   getOrCreateDeviceId,
 } from '../lib/crypto';
+import { getAuthErrorMessage } from '../lib/errors';
 
 // Login result with possible warnings
 interface LoginResult {
@@ -154,7 +155,7 @@ export function AuthProvider({ children }: { children: preact.ComponentChildren 
         return { success: true };
       } catch (error: unknown) {
         console.error('Registration error:', error);
-        const message = error instanceof Error ? error.message : 'Registrasi gagal. Silakan coba lagi.';
+        const message = getAuthErrorMessage(error);
         return { success: false, error: message };
       }
     },
@@ -313,7 +314,7 @@ export function AuthProvider({ children }: { children: preact.ComponentChildren 
         return { success: true, warning };
       } catch (error: unknown) {
         console.error('Login error:', error);
-        const message = error instanceof Error ? error.message : 'Login gagal. Periksa email dan password Anda.';
+        const message = getAuthErrorMessage(error);
         return { success: false, error: message };
       }
     },

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'preact/hooks';
 import { useAuth } from '../../contexts/AuthContext';
+import { getAuthErrorMessage } from '../../lib/errors';
 
 interface RegisterFormProps {
   onSwitchToLogin: () => void;
@@ -55,13 +56,13 @@ export function RegisterForm({ onSwitchToLogin }: RegisterFormProps) {
       ]) as { success: boolean; error?: string };
 
       if (!result.success) {
-        setError(result.error || 'Registrasi gagal');
+        setError(getAuthErrorMessage(result.error));
         setIsLoading(false);
       }
       // If success, isLoading will be reset by app.tsx when redirecting
     } catch (error: unknown) {
       console.error('Registration error:', error);
-      const message = error instanceof Error ? error.message : 'Registrasi gagal. Silakan coba lagi.';
+      const message = getAuthErrorMessage(error);
       setError(message);
       setIsLoading(false);
     }
@@ -141,7 +142,7 @@ export function RegisterForm({ onSwitchToLogin }: RegisterFormProps) {
 
       <button
         type="submit"
-        class="w-full btn-primary py-3"
+        class="btn py-3 auth-submit"
         disabled={isLoading}
       >
         {isLoading ? (

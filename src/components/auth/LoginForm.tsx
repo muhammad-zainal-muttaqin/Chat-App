@@ -55,7 +55,7 @@ export function LoginForm({ onSwitchToRegister }: LoginFormProps) {
             setError(`Password mungkin salah untuk mendekripsi kunci enkripsi. Silakan coba lagi. (Percobaan ${newFailureCount}/3)`);
           }
         } else {
-          setError(result.error || 'Login gagal');
+          setError(getAuthErrorMessage(result.error));
         }
         setIsLoading(false);
         return;
@@ -86,7 +86,7 @@ export function LoginForm({ onSwitchToRegister }: LoginFormProps) {
       const result = await login(email, password, true);
 
       if (!result.success) {
-        setError(result.error || 'Gagal membuat kunci baru');
+        setError(getAuthErrorMessage(result.error));
         setIsLoading(false);
         return;
       }
@@ -202,7 +202,7 @@ export function LoginForm({ onSwitchToRegister }: LoginFormProps) {
 
       <button
         type="submit"
-        class="w-full btn-primary py-3"
+        class="btn py-3 auth-submit"
         disabled={isLoading}
       >
         {isLoading ? (

@@ -21,56 +21,68 @@ function isConvexError(error: unknown): error is ConvexError {
   );
 }
 
+function extractRequestId(text: string): string | null {
+  const match = text.match(/Request ID:\s*([a-zA-Z0-9]+)/i);
+  return match?.[1] ?? null;
+}
+
+function isInternalConvexMessage(text: string): boolean {
+  return text.includes('[CONVEX') || text.includes('Server Error Called by client');
+}
+
+function toSafeServerMessage(text: string): string {
+  const requestId = extractRequestId(text);
+  return requestId
+    ? `Terjadi gangguan server. Coba lagi. (Ref: ${requestId})`
+    : 'Terjadi gangguan server. Coba lagi dalam beberapa saat.';
+}
+
+function mapKnownAuthCode(text: string): string | null {
+  if (text.includes(AuthErrors.USER_NOT_FOUND)) {
+    return 'Email belum terdaftar. Silakan daftar terlebih dahulu.';
+  }
+  if (text.includes(AuthErrors.INVALID_PASSWORD)) {
+    return 'Email atau password salah.';
+  }
+  if (text.includes(AuthErrors.KEY_DECRYPT_FAILED)) {
+    return 'Gagal membuka kunci enkripsi. Cek password Anda.';
+  }
+  if (text.includes(AuthErrors.DUPLICATE_PUBLIC_KEY)) {
+    return 'Kunci keamanan bentrok. Silakan login ulang.';
+  }
+  if (text.toLowerCase().includes('not authenticated')) {
+    return 'Sesi Anda berakhir. Silakan login ulang.';
+  }
+  return null;
+}
+
 /**
  * Extracts a user-friendly error message from an unknown error object.
  * Handles Convex errors, standard Errors, and other unknown types.
  */
 export function getAuthErrorMessage(error: unknown): string {
-  // Default fallback message
-  let message = 'Login gagal. Silakan coba lagi.';
+  const defaultMessage = 'Login gagal. Silakan coba lagi.';
+
+  if (typeof error === 'string') {
+    return mapKnownAuthCode(error) ??
+      (isInternalConvexMessage(error) ? toSafeServerMessage(error) : error || defaultMessage);
+  }
 
   // 1. Handle Convex Errors (checking data property)
   if (isConvexError(error)) {
     const errorData = error.data;
     if (typeof errorData === 'string') {
-      if (errorData.includes(AuthErrors.USER_NOT_FOUND)) {
-        return 'Email is not registered. Please sign up first.';
-      }
-      if (errorData.includes(AuthErrors.INVALID_PASSWORD)) {
-        return 'Incorrect email or password.';
-      }
-      // Return raw message if it's a custom string but not one of our known codes
-      // But filter out the generic "Server Error" wrapper if possible
-      if (
-        typeof errorData === 'string' &&
-        !errorData.includes('Server Error') &&
-        !errorData.includes('CONVEX')
-      ) {
-        return errorData;
-      }
+      return mapKnownAuthCode(errorData) ??
+        (isInternalConvexMessage(errorData) ? toSafeServerMessage(errorData) : errorData || defaultMessage);
     }
   }
 
   // 2. Handle Standard Errors and Error-like objects (checking message property)
   const errorMessage = (error as any)?.message;
   if (typeof errorMessage === 'string') {
-    // Sometimes the message itself contains the code if not properly wrapped
-    if (errorMessage.includes(AuthErrors.USER_NOT_FOUND)) {
-      return 'Email is not registered. Please sign up first.';
-    }
-    if (errorMessage.includes(AuthErrors.INVALID_PASSWORD)) {
-      return 'Incorrect email or password.';
-    }
-    
-    // Avoid showing the generic "Server Error Called by client" or internal Convex logs
-    // Example: "[CONVEX M(auth:login)] [Request ID: ...] Server Error Called by client"
-    if (
-      !errorMessage.includes('Server Error') &&
-      !errorMessage.includes('CONVEX')
-    ) {
-      return errorMessage;
-    }
+    return mapKnownAuthCode(errorMessage) ??
+      (isInternalConvexMessage(errorMessage) ? toSafeServerMessage(errorMessage) : errorMessage || defaultMessage);
   }
 
-  return message;
+  return defaultMessage;
 }
