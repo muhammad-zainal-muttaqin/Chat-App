@@ -3,13 +3,13 @@ import { query, mutation, QueryCtx, MutationCtx } from './_generated/server';
 // import { Id } from './_generated/dataModel';
 
 // Helper to get current user from session token
-async function getCurrentUserId(ctx: QueryCtx | MutationCtx, token: string) {
+async function getCurrentUserId(ctx: QueryCtx | MutationCtx, token: string, deviceId: string) {
   const session = await ctx.db
     .query('sessions')
     .withIndex('by_token', q => q.eq('token', token))
     .first();
 
-  if (!session || session.expiresAt < Date.now()) {
+  if (!session || session.expiresAt < Date.now() || session.deviceId !== deviceId) {
     throw new Error('Not authenticated');
   }
 
@@ -31,16 +31,18 @@ function isOnline(lastSeenAt: number | undefined | null, isOnlineFlag: boolean |
 export const list = query({
   args: {
     token: v.string(),
+    deviceId: v.string(),
   },
   handler: async (ctx, args) => {
-    const userId = await getCurrentUserId(ctx, args.token);
+    const userId = await getCurrentUserId(ctx, args.token, args.deviceId);
 
     // Get all conversations
     const allConversations = await ctx.db.query('conversations').collect();
 
     // Filter conversations where user is a participant
     const userConversations = allConversations.filter(conv =>
-      conv.participantIds.includes(userId)
+      conv.participantIds.includes(userId) &&
+      !(conv.hiddenForUserIds ?? []).includes(userId)
     );
 
     // Get conversation details with last message and other participant
@@ -51,14 +53,16 @@ export const list = query({
         const otherUser = otherUserId ? await ctx.db.get(otherUserId) : null;
 
         // Get last message
-        const lastMessage = await ctx.db
+        const messagesDesc = await ctx.db
           .query('messages')
           .withIndex('by_conversation', q => q.eq('conversationId', conv._id))
           .order('desc')
-          .first();
+          .collect();
+
+        const lastMessage = messagesDesc.find((m) => !(m.deletedForUserIds ?? []).includes(userId)) || null;
 
         // Count unread messages
-        const unreadMessages = await ctx.db
+        const unreadMessagesRaw = await ctx.db
           .query('messages')
           .withIndex('by_conversation', q => q.eq('conversationId', conv._id))
           .filter(q =>
@@ -69,6 +73,7 @@ export const list = query({
             )
           )
           .collect();
+        const unreadMessages = unreadMessagesRaw.filter((m) => !(m.deletedForUserIds ?? []).includes(userId));
 
         return {
           _id: conv._id,
@@ -100,10 +105,11 @@ export const list = query({
 export const getOrCreate = mutation({
   args: {
     token: v.string(),
+    deviceId: v.string(),
     otherUserId: v.id('users'),
   },
   handler: async (ctx, args) => {
-    const userId = await getCurrentUserId(ctx, args.token);
+    const userId = await getCurrentUserId(ctx, args.token, args.deviceId);
 
     if (userId === args.otherUserId) {
       throw new Error('Cannot create conversation with yourself');
@@ -123,6 +129,15 @@ export const getOrCreate = mutation({
     );
 
     if (existingConv) {
+      // Unhide for current user if they previously deleted this chat locally.
+      const hiddenForUserIds = existingConv.hiddenForUserIds ?? [];
+      if (hiddenForUserIds.includes(userId)) {
+        await ctx.db.patch(existingConv._id, {
+          hiddenForUserIds: hiddenForUserIds.filter((id) => id !== userId),
+          updatedAt: Date.now(),
+        });
+      }
+
       return {
         _id: existingConv._id,
         isNew: false,
@@ -133,6 +148,7 @@ export const getOrCreate = mutation({
     const now = Date.now();
     const conversationId = await ctx.db.insert('conversations', {
       participantIds: [userId, args.otherUserId],
+      hiddenForUserIds: [],
       createdAt: now,
       updatedAt: now,
     });
@@ -148,16 +164,20 @@ export const getOrCreate = mutation({
 export const getById = query({
   args: {
     token: v.string(),
+    deviceId: v.string(),
     conversationId: v.id('conversations'),
   },
   handler: async (ctx, args) => {
-    const userId = await getCurrentUserId(ctx, args.token);
+    const userId = await getCurrentUserId(ctx, args.token, args.deviceId);
 
     const conversation = await ctx.db.get(args.conversationId);
     if (!conversation) return null;
 
     // Check if user is participant
-    if (!conversation.participantIds.includes(userId)) {
+    if (
+      !conversation.participantIds.includes(userId) ||
+      (conversation.hiddenForUserIds ?? []).includes(userId)
+    ) {
       return null;
     }
 
@@ -183,17 +203,22 @@ export const getById = query({
 export const getMessages = query({
   args: {
     token: v.string(),
+    deviceId: v.string(),
     conversationId: v.id('conversations'),
     limit: v.optional(v.number()),
     cursor: v.optional(v.number()), // timestamp for pagination
   },
   handler: async (ctx, args) => {
-    const userId = await getCurrentUserId(ctx, args.token);
+    const userId = await getCurrentUserId(ctx, args.token, args.deviceId);
     const limit = args.limit ?? 50;
 
     // Verify user is participant
     const conversation = await ctx.db.get(args.conversationId);
-    if (!conversation || !conversation.participantIds.includes(userId)) {
+    if (
+      !conversation ||
+      !conversation.participantIds.includes(userId) ||
+      (conversation.hiddenForUserIds ?? []).includes(userId)
+    ) {
       throw new Error('Conversation not found');
     }
 
@@ -206,9 +231,9 @@ export const getMessages = query({
     const allMessages = await messagesQuery.collect();
 
     // Filter by cursor if provided
-    let filteredMessages = allMessages;
+    let filteredMessages = allMessages.filter((m) => !(m.deletedForUserIds ?? []).includes(userId));
     if (args.cursor) {
-      filteredMessages = allMessages.filter(m => m._creationTime < args.cursor!);
+      filteredMessages = filteredMessages.filter(m => m._creationTime < args.cursor!);
     }
 
     // Take limit + 1 to check if there are more
@@ -226,6 +251,7 @@ export const getMessages = query({
         _id: m._id,
         conversationId: m.conversationId,
         senderId: m.senderId,
+        senderPublicKey: m.senderPublicKey,
         ciphertext: m.ciphertext,
         ciphertextSelf: m.ciphertextSelf, // Include self-encrypted content
         nonce: m.nonce,
@@ -241,14 +267,16 @@ export const getMessages = query({
   },
 });
 
-// Delete a conversation and all its messages
+// Delete a conversation locally (hide for current user only).
+// Conversation/messages are permanently removed only if all participants hide it.
 export const deleteConversation = mutation({
   args: {
     token: v.string(),
+    deviceId: v.string(),
     conversationId: v.id('conversations'),
   },
   handler: async (ctx, args) => {
-    const userId = await getCurrentUserId(ctx, args.token);
+    const userId = await getCurrentUserId(ctx, args.token, args.deviceId);
 
     const conversation = await ctx.db.get(args.conversationId);
     if (!conversation) {
@@ -259,18 +287,31 @@ export const deleteConversation = mutation({
       throw new Error('Not authorized to delete this conversation');
     }
 
-    // Delete all messages in the conversation
-    const messages = await ctx.db
-      .query('messages')
-      .withIndex('by_conversation', q => q.eq('conversationId', args.conversationId))
-      .collect();
-
-    for (const message of messages) {
-      await ctx.db.delete(message._id);
+    const hiddenForUserIds = [...(conversation.hiddenForUserIds ?? [])];
+    if (!hiddenForUserIds.includes(userId)) {
+      hiddenForUserIds.push(userId);
     }
 
-    // Delete the conversation itself
-    await ctx.db.delete(args.conversationId);
+    const hiddenForAllParticipants = conversation.participantIds.every((participantId) =>
+      hiddenForUserIds.includes(participantId)
+    );
+
+    if (hiddenForAllParticipants) {
+      const messages = await ctx.db
+        .query('messages')
+        .withIndex('by_conversation', q => q.eq('conversationId', args.conversationId))
+        .collect();
+
+      for (const message of messages) {
+        await ctx.db.delete(message._id);
+      }
+
+      await ctx.db.delete(args.conversationId);
+    } else {
+      await ctx.db.patch(args.conversationId, {
+        hiddenForUserIds,
+      });
+    }
 
     return { success: true };
   },

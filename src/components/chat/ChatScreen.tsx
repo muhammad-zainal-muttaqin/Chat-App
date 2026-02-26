@@ -9,15 +9,16 @@ import { isUserOnline, formatLastSeen } from '../../lib/presence';
 interface ChatScreenProps {
   conversationId: Id<'conversations'>;
   token: string;
+  deviceId: string;
   currentUserId: Id<'users'>;
   currentUserPublicKey: string;
   onBack?: () => void;
   onToggleSidebar?: () => void;
 }
 
-export function ChatScreen({ conversationId, token, currentUserId, currentUserPublicKey, onBack, onToggleSidebar }: ChatScreenProps) {
-  const conversation = useQuery(api.conversations.getById, { token, conversationId });
-  const messagesData = useQuery(api.conversations.getMessages, { token, conversationId, limit: 50 });
+export function ChatScreen({ conversationId, token, deviceId, currentUserId, currentUserPublicKey, onBack, onToggleSidebar }: ChatScreenProps) {
+  const conversation = useQuery(api.conversations.getById, { token, deviceId, conversationId });
+  const messagesData = useQuery(api.conversations.getMessages, { token, deviceId, conversationId, limit: 50 });
   const markAllRead = useMutation(api.messages.markAllRead);
   const deleteConversation = useMutation(api.conversations.deleteConversation);
   const [sentMessagesPlaintext, setSentMessagesPlaintext] = useState<Map<string, string>>(new Map());
@@ -25,9 +26,9 @@ export function ChatScreen({ conversationId, token, currentUserId, currentUserPu
 
   useEffect(() => {
     if (messagesData?.messages.length) {
-      markAllRead({ token, conversationId });
+      markAllRead({ token, deviceId, conversationId });
     }
-  }, [conversationId, messagesData?.messages.length]);
+  }, [conversationId, messagesData?.messages.length, deviceId]);
 
   if (conversation === undefined || messagesData === undefined) {
     return (
@@ -48,9 +49,9 @@ export function ChatScreen({ conversationId, token, currentUserId, currentUserPu
   }
 
   return (
-    <div class="flex-1 flex flex-col h-full min-h-0 bg-dark-100 dark:bg-dark-950">
+    <div class="flex-1 flex flex-col h-full min-h-0 bg-transparent">
       {/* Header */}
-      <header class="h-16 px-4 border-b border-dark-200 dark:border-dark-800 flex items-center justify-between bg-white dark:bg-dark-900 flex-shrink-0">
+      <header class="h-16 px-4 border-b border-dark-200 dark:border-dark-800 flex items-center justify-between card-surface flex-shrink-0">
         <div class="flex items-center gap-3 min-w-0 flex-1">
           <button
             onClick={onToggleSidebar}
@@ -64,7 +65,7 @@ export function ChatScreen({ conversationId, token, currentUserId, currentUserPu
           </div>
 
           <div class="min-w-0 flex-1">
-            <h2 class="font-semibold text-dark-900 dark:text-white truncate text-sm">
+            <h2 class="brand-title font-semibold text-dark-900 dark:text-white truncate text-sm">
               {conversation.otherUser?.displayName || 'Unknown'}
             </h2>
             <p class="text-xs text-dark-500 dark:text-dark-400 flex items-center gap-1.5">
@@ -94,9 +95,9 @@ export function ChatScreen({ conversationId, token, currentUserId, currentUserPu
                 <div class="absolute right-0 top-full mt-1 w-44 bg-white dark:bg-dark-800 rounded-xl shadow-lg border border-dark-200 dark:border-dark-700 py-1 z-50">
                   <button
                     onClick={async () => {
-                      if (confirm('Delete this conversation?')) {
+                      if (confirm('Hide this conversation from your list?')) {
                         try {
-                          await deleteConversation({ token, conversationId });
+                          await deleteConversation({ token, deviceId, conversationId });
                           if (onBack) onBack();
                         } catch (err) {
                           console.error('Failed to delete', err);
@@ -107,7 +108,7 @@ export function ChatScreen({ conversationId, token, currentUserId, currentUserPu
                     class="w-full px-4 py-2.5 text-left text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/10 flex items-center gap-2 transition-colors"
                   >
                     <div class="i-carbon-trash-can w-4 h-4" />
-                    Delete Chat
+                    Hide Chat
                   </button>
                 </div>
               </>
@@ -117,13 +118,14 @@ export function ChatScreen({ conversationId, token, currentUserId, currentUserPu
       </header>
 
       {/* Messages */}
-      <div class="flex-1 min-h-0 overflow-hidden bg-dark-100 dark:bg-dark-950">
+      <div class="flex-1 min-h-0 overflow-hidden bg-transparent">
         <MessageList
           messages={messagesData.messages}
           currentUserId={currentUserId}
           otherUserPublicKey={conversation.otherUser?.publicKey || ''}
           currentUserPublicKey={currentUserPublicKey}
           token={token}
+          deviceId={deviceId}
           plaintextCache={sentMessagesPlaintext}
         />
       </div>
@@ -133,6 +135,7 @@ export function ChatScreen({ conversationId, token, currentUserId, currentUserPu
         conversationId={conversationId}
         recipientPublicKey={conversation.otherUser?.publicKey || ''}
         token={token}
+        deviceId={deviceId}
         onMessageSent={(messageId, plaintext) => {
           setSentMessagesPlaintext(prev => {
             const newMap = new Map(prev);

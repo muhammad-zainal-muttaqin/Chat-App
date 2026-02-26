@@ -118,7 +118,7 @@ export const register = mutation({
 
     // Create session with device binding
     const token = generateToken();
-    const expiresAt = Date.now() + 7 * 24 * 60 * 60 * 1000; // 7 days (more secure)
+    const expiresAt = Date.now() + 24 * 60 * 60 * 1000; // 24 hours
 
     await ctx.db.insert('sessions', {
       userId,
@@ -184,7 +184,19 @@ export const login = mutation({
 
     // Create new session with device binding
     const token = generateToken();
-    const expiresAt = Date.now() + 7 * 24 * 60 * 60 * 1000; // 7 days (more secure)
+    const expiresAt = Date.now() + 24 * 60 * 60 * 1000; // 24 hours
+
+    // Revoke previous sessions on the same device to invalidate old copied tokens
+    const existingSessions = await ctx.db
+      .query('sessions')
+      .withIndex('by_user', q => q.eq('userId', user._id))
+      .collect();
+
+    for (const existingSession of existingSessions) {
+      if (existingSession.deviceId === args.deviceId) {
+        await ctx.db.delete(existingSession._id);
+      }
+    }
 
     await ctx.db.insert('sessions', {
       userId: user._id,
@@ -207,6 +219,7 @@ export const login = mutation({
 export const logout = mutation({
   args: {
     token: v.string(),
+    deviceId: v.string(),
   },
   handler: async (ctx, args) => {
     const session = await ctx.db
@@ -214,7 +227,7 @@ export const logout = mutation({
       .withIndex('by_token', q => q.eq('token', args.token))
       .first();
 
-    if (session) {
+    if (session && session.deviceId === args.deviceId) {
       await ctx.db.delete(session._id);
     }
 
@@ -257,6 +270,7 @@ export const validateSession = query({
 export const updatePublicKey = mutation({
   args: {
     token: v.string(),
+    deviceId: v.string(),
     publicKey: v.string(),
     encryptedPrivateKey: v.optional(v.string()),
   },
@@ -266,7 +280,7 @@ export const updatePublicKey = mutation({
       .withIndex('by_token', q => q.eq('token', args.token))
       .first();
 
-    if (!session || session.expiresAt < Date.now()) {
+    if (!session || session.expiresAt < Date.now() || session.deviceId !== args.deviceId) {
       throw new Error('Not authenticated');
     }
 

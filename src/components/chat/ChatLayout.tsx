@@ -23,7 +23,7 @@ interface ChatLayoutProps {
 }
 
 export function ChatLayout({ user }: ChatLayoutProps) {
-  const { logout, token, keyPair } = useAuth();
+  const { logout, token, deviceId, keyPair } = useAuth();
   const { isDark, toggleTheme } = useTheme();
   const [selectedConversationId, setSelectedConversationId] = useState<Id<'conversations'> | null>(null);
   const [showNewChat, setShowNewChat] = useState(false);
@@ -56,7 +56,7 @@ export function ChatLayout({ user }: ChatLayoutProps) {
   };
 
   return (
-    <div class="h-screen w-full flex overflow-hidden bg-dark-100 dark:bg-dark-950">
+    <div class="h-screen w-full flex overflow-hidden app-shell-bg">
       {/* Mobile Backdrop */}
       {isMobileMenuOpen && (
         <div
@@ -69,7 +69,7 @@ export function ChatLayout({ user }: ChatLayoutProps) {
       <aside
         class={`
           fixed lg:relative inset-y-0 left-0 z-50 w-72 lg:w-80
-          bg-white dark:bg-dark-900
+          card-surface lg:rounded-none
           flex flex-col transition-transform duration-300 ease-out
           ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
         `}
@@ -77,10 +77,10 @@ export function ChatLayout({ user }: ChatLayoutProps) {
         {/* Header - 64px to match chat header */}
         <div class="h-16 px-4 flex items-center justify-between border-b border-dark-200 dark:border-dark-800">
           <div class="flex items-center gap-3">
-            <div class="w-9 h-9 rounded-xl bg-primary-500 flex-center">
+            <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-primary-600 to-cyan-500 flex-center shadow-lg shadow-primary-600/30">
               <div class="i-carbon-chat text-white w-5 h-5" />
             </div>
-            <span class="font-semibold text-dark-900 dark:text-white">Priva Chat</span>
+            <span class="brand-title font-semibold text-dark-900 dark:text-white">Priva Chat</span>
             <span class="text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded border border-green-200">v1.1</span>
           </div>
           <button
@@ -122,9 +122,10 @@ export function ChatLayout({ user }: ChatLayoutProps) {
 
         {/* Conversation List */}
         <div class="flex-1 overflow-y-auto px-2">
-          {token && (
+          {token && deviceId && (
             <ConversationList
               token={token}
+              deviceId={deviceId}
               selectedId={selectedConversationId}
               onSelect={handleSelectConversation}
               currentUserId={user._id}
@@ -148,22 +149,23 @@ export function ChatLayout({ user }: ChatLayoutProps) {
       <div class="hidden lg:block w-px bg-dark-200 dark:bg-dark-800" />
 
       {/* Main Content */}
-      <main class="flex-1 flex flex-col min-w-0 h-full bg-white dark:bg-dark-900">
-        {selectedConversationId && token ? (
+      <main class="flex-1 flex flex-col min-w-0 h-full bg-transparent">
+        {selectedConversationId && token && deviceId ? (
           <ChatScreen
             conversationId={selectedConversationId}
             token={token}
+            deviceId={deviceId}
             currentUserId={user._id}
             currentUserPublicKey={keyPair?.publicKey || user.publicKey}
             onBack={() => setSelectedConversationId(null)}
             onToggleSidebar={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
           />
         ) : (
-          <div class="h-full flex flex-col items-center justify-center p-8 text-center">
-            <div class="w-16 h-16 rounded-2xl bg-dark-100 dark:bg-dark-800 flex-center mb-6">
-              <div class="i-carbon-chat w-8 h-8 text-dark-400 dark:text-dark-500" />
+          <div class="h-full flex flex-col items-center justify-center p-8 text-center animate-slide-up">
+            <div class="w-16 h-16 rounded-2xl bg-gradient-to-br from-primary-600 to-cyan-500 flex-center mb-6 shadow-lg shadow-primary-600/30">
+              <div class="i-carbon-chat w-8 h-8 text-white" />
             </div>
-            <h2 class="text-xl font-semibold text-dark-900 dark:text-white mb-2">
+            <h2 class="brand-title text-xl font-semibold text-dark-900 dark:text-white mb-2">
               Welcome back, {user.displayName.split(' ')[0]}
             </h2>
             <p class="text-dark-500 dark:text-dark-400 max-w-sm mb-8 text-sm">
@@ -187,9 +189,10 @@ export function ChatLayout({ user }: ChatLayoutProps) {
       </main>
 
       {/* New Chat Modal */}
-      {showNewChat && token && (
+      {showNewChat && token && deviceId && (
         <NewChatModal
           token={token}
+          deviceId={deviceId}
           onClose={() => setShowNewChat(false)}
           onConversationCreated={handleNewConversation}
         />

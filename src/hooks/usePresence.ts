@@ -4,7 +4,7 @@ import { api } from '../../convex/_generated/api';
 
 const HEARTBEAT_INTERVAL = 2000; // 2 seconds (faster updates)
 
-export function usePresence(token: string | null) {
+export function usePresence(token: string | null, deviceId: string | null) {
   const updatePresence = useMutation(api.users.updatePresence);
   const setOffline = useMutation(api.users.setOffline);
   const intervalRef = useRef<number | null>(null);
@@ -21,11 +21,11 @@ export function usePresence(token: string | null) {
 
   // Heartbeat effect
   useEffect(() => {
-    if (!token) return;
+    if (!token || !deviceId) return;
 
     const sendHeartbeat = async () => {
       try {
-        await updatePresenceRef.current({ token });
+        await updatePresenceRef.current({ token, deviceId });
       } catch (err) {
         console.error('Failed to send heartbeat:', err);
       }
@@ -43,23 +43,23 @@ export function usePresence(token: string | null) {
         clearInterval(intervalRef.current);
       }
     };
-  }, [token]);
+  }, [token, deviceId]);
 
   // Handle tab visibility change
   useEffect(() => {
-    if (!token) return;
+    if (!token || !deviceId) return;
 
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
         // Resume heartbeat when tab becomes visible
-        updatePresenceRef.current({ token }).catch(err => {
+        updatePresenceRef.current({ token, deviceId }).catch(err => {
           console.error('Failed to send heartbeat on visibility change:', err);
         });
       }
     };
 
     const handleFocus = () => {
-      updatePresenceRef.current({ token }).catch(err => {
+      updatePresenceRef.current({ token, deviceId }).catch(err => {
         console.error('Failed to send heartbeat on focus:', err);
       });
     };
@@ -71,20 +71,20 @@ export function usePresence(token: string | null) {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('focus', handleFocus);
     };
-  }, [token]);
+  }, [token, deviceId]);
 
   // Handle beforeunload (tab/browser close)
   useEffect(() => {
-    if (!token) return;
+    if (!token || !deviceId) return;
 
     const handleBeforeUnload = () => {
       // Best effort to set offline - may not always complete
-      setOfflineRef.current({ token });
+      setOfflineRef.current({ token, deviceId });
     };
 
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => {
       window.removeEventListener('beforeunload', handleBeforeUnload);
     };
-  }, [token]);
+  }, [token, deviceId]);
 }

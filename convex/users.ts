@@ -4,7 +4,7 @@ import { query, mutation, QueryCtx } from './_generated/server';
 
 // Helper to get current user from session token with device validation
 async function getCurrentUser(ctx: QueryCtx, token: string | undefined, deviceId?: string) {
-  if (!token) return null;
+  if (!token || !deviceId) return null;
 
   const session = await ctx.db
     .query('sessions')
@@ -13,8 +13,8 @@ async function getCurrentUser(ctx: QueryCtx, token: string | undefined, deviceId
 
   if (!session || session.expiresAt < Date.now()) return null;
 
-  // SECURITY: Validate device ID if provided (prevents session hijacking)
-  if (deviceId && session.deviceId !== deviceId) {
+  // SECURITY: Validate device ID (prevents session hijacking)
+  if (session.deviceId !== deviceId) {
     console.error('SECURITY: Device mismatch detected in getCurrentUser');
     return null;
   }
@@ -37,7 +37,7 @@ function isOnline(lastSeenAt: number | undefined | null, isOnlineFlag: boolean |
 export const getMe = query({
   args: {
     token: v.string(),
-    deviceId: v.optional(v.string()), // Optional for backwards compatibility, but should be provided
+    deviceId: v.string(),
   },
   handler: async (ctx, args) => {
     if (!args.token) return null;
@@ -79,9 +79,10 @@ export const search = query({
   args: {
     query: v.string(),
     token: v.string(),
+    deviceId: v.string(),
   },
   handler: async (ctx, args) => {
-    const currentUser = await getCurrentUser(ctx, args.token);
+    const currentUser = await getCurrentUser(ctx, args.token, args.deviceId);
     if (!currentUser) return [];
 
     const searchQuery = args.query.toLowerCase();
@@ -111,6 +112,7 @@ export const search = query({
 export const updateProfile = mutation({
   args: {
     token: v.string(),
+    deviceId: v.string(),
     displayName: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
@@ -119,7 +121,7 @@ export const updateProfile = mutation({
       .withIndex('by_token', q => q.eq('token', args.token))
       .first();
 
-    if (!session || session.expiresAt < Date.now()) {
+    if (!session || session.expiresAt < Date.now() || session.deviceId !== args.deviceId) {
       throw new Error('Not authenticated');
     }
 
@@ -143,6 +145,7 @@ export const updateProfile = mutation({
 export const updatePresence = mutation({
   args: {
     token: v.string(),
+    deviceId: v.string(),
   },
   handler: async (ctx, args) => {
     const session = await ctx.db
@@ -150,7 +153,7 @@ export const updatePresence = mutation({
       .withIndex('by_token', q => q.eq('token', args.token))
       .first();
 
-    if (!session || session.expiresAt < Date.now()) {
+    if (!session || session.expiresAt < Date.now() || session.deviceId !== args.deviceId) {
       return { success: false };
     }
 
@@ -168,6 +171,7 @@ export const updatePresence = mutation({
 export const setOffline = mutation({
   args: {
     token: v.string(),
+    deviceId: v.string(),
   },
   handler: async (ctx, args) => {
     const session = await ctx.db
@@ -175,7 +179,7 @@ export const setOffline = mutation({
       .withIndex('by_token', q => q.eq('token', args.token))
       .first();
 
-    if (!session) return { success: false };
+    if (!session || session.deviceId !== args.deviceId) return { success: false };
 
     await ctx.db.patch(session.userId, {
       isOnline: false,

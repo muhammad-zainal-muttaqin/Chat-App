@@ -4,12 +4,12 @@ import { AuthScreen } from './components/auth/AuthScreen';
 import { ChatLayout } from './components/chat/ChatLayout';
 import { useAuth } from './contexts/AuthContext';
 import { useEffect, useState } from 'preact/hooks';
-import { initCrypto, getDeviceId } from './lib/crypto';
+import { initCrypto } from './lib/crypto';
 import { usePresence } from './hooks/usePresence';
 
 export function App() {
   const [cryptoReady, setCryptoReady] = useState(false);
-  const { token, isLoading: authLoading, isAuthenticated } = useAuth();
+  const { token, deviceId, isLoading: authLoading, isAuthenticated } = useAuth();
 
   // Initialize crypto
   useEffect(() => {
@@ -17,14 +17,13 @@ export function App() {
   }, []);
 
   // Query user only when authenticated (include deviceId for session hijacking protection)
-  const deviceId = getDeviceId();
   const user = useQuery(
     api.users.getMe,
-    isAuthenticated && token ? { token, deviceId: deviceId || undefined } : 'skip'
+    isAuthenticated && token && deviceId ? { token, deviceId } : 'skip'
   );
 
   // Start presence heartbeat when authenticated
-  usePresence(isAuthenticated && token ? token : null);
+  usePresence(isAuthenticated && token && deviceId ? token : null, deviceId);
 
   // Loading crypto
   if (!cryptoReady) {

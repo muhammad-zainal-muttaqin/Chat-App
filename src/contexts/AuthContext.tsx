@@ -7,6 +7,7 @@ import {
   storeKeyPair,
   loadKeyPair,
   clearKeyPair,
+  isKeyPairConsistent,
   KeyPair,
   encryptPrivateKeyWithPassword,
   decryptPrivateKeyWithPassword,
@@ -22,6 +23,7 @@ interface LoginResult {
 
 interface AuthContextType {
   token: string | null;
+  deviceId: string | null;
   keyPair: KeyPair | null;
   isLoading: boolean;
   isAuthenticated: boolean;
@@ -34,8 +36,60 @@ const AuthContext = createContext<AuthContextType | null>(null);
 
 const TOKEN_STORAGE_KEY = 'privacy_chat_token';
 
+function canUseStorage(storage: Storage | undefined): storage is Storage {
+  if (!storage) return false;
+  try {
+    const probeKey = '__privacy_chat_token_probe__';
+    storage.setItem(probeKey, '1');
+    storage.removeItem(probeKey);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function getPreferredTokenStorage(): Storage | null {
+  const maybeSessionStorage = (globalThis as { sessionStorage?: Storage }).sessionStorage;
+  if (canUseStorage(maybeSessionStorage)) return maybeSessionStorage;
+
+  const maybeLocalStorage = (globalThis as { localStorage?: Storage }).localStorage;
+  if (canUseStorage(maybeLocalStorage)) return maybeLocalStorage;
+
+  return null;
+}
+
+function readStoredToken(): string | null {
+  const storage = getPreferredTokenStorage();
+  if (!storage) return null;
+  return storage.getItem(TOKEN_STORAGE_KEY);
+}
+
+function writeStoredToken(token: string): void {
+  const storage = getPreferredTokenStorage();
+  if (!storage) return;
+  storage.setItem(TOKEN_STORAGE_KEY, token);
+
+  // If token is stored in sessionStorage, clear old localStorage copy.
+  const maybeLocalStorage = (globalThis as { localStorage?: Storage }).localStorage;
+  if (canUseStorage(maybeLocalStorage) && storage !== maybeLocalStorage) {
+    maybeLocalStorage.removeItem(TOKEN_STORAGE_KEY);
+  }
+}
+
+function clearStoredToken(): void {
+  const maybeSessionStorage = (globalThis as { sessionStorage?: Storage }).sessionStorage;
+  const maybeLocalStorage = (globalThis as { localStorage?: Storage }).localStorage;
+  if (canUseStorage(maybeSessionStorage)) {
+    maybeSessionStorage.removeItem(TOKEN_STORAGE_KEY);
+  }
+  if (canUseStorage(maybeLocalStorage)) {
+    maybeLocalStorage.removeItem(TOKEN_STORAGE_KEY);
+  }
+}
+
 export function AuthProvider({ children }: { children: preact.ComponentChildren }) {
   const [token, setToken] = useState<string | null>(null);
+  const [deviceId, setDeviceId] = useState<string | null>(null);
   const [keyPair, setKeyPair] = useState<KeyPair | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -43,13 +97,22 @@ export function AuthProvider({ children }: { children: preact.ComponentChildren 
   const registerMutation = useMutation(api.auth.register);
   const logoutMutation = useMutation(api.auth.logout);
   const syncKeysMutation = useMutation(api.auth.updatePublicKey);
+  const backfillSenderPublicKeysMutation = useMutation(api.messages.backfillSenderPublicKeys);
 
   // Load token and keys on mount
   useEffect(() => {
-    const storedToken = localStorage.getItem(TOKEN_STORAGE_KEY);
+    const currentDeviceId = getOrCreateDeviceId();
+    setDeviceId(currentDeviceId);
+
+    const storedToken = readStoredToken();
     const storedKeyPair = loadKeyPair();
 
-    if (storedToken) {
+    // Never keep an auth session without a valid encryption key pair.
+    // Force re-login so keys can be restored from encrypted server backup.
+    if (storedToken && !storedKeyPair) {
+      console.warn('Session token found without valid encryption keys. Forcing re-authentication.');
+      clearStoredToken();
+    } else if (storedToken) {
       setToken(storedToken);
     }
     if (storedKeyPair) {
@@ -62,6 +125,9 @@ export function AuthProvider({ children }: { children: preact.ComponentChildren 
   const register = useCallback(
     async (email: string, password: string, displayName: string) => {
       try {
+        const currentDeviceId = deviceId ?? getOrCreateDeviceId();
+        setDeviceId(currentDeviceId);
+
         // Generate encryption keys first
         const newKeyPair = generateKeyPair();
 
@@ -69,19 +135,17 @@ export function AuthProvider({ children }: { children: preact.ComponentChildren 
         const encryptedPrivateKey = await encryptPrivateKeyWithPassword(newKeyPair.privateKey, password);
 
         // Get or create device ID for session binding (prevents session hijacking)
-        const deviceId = getOrCreateDeviceId();
-
         const result = await registerMutation({
           email,
           password,
           displayName,
           publicKey: newKeyPair.publicKey,
           encryptedPrivateKey,
-          deviceId,
+          deviceId: currentDeviceId,
         });
 
         // Store token and keys
-        localStorage.setItem(TOKEN_STORAGE_KEY, result.token);
+        writeStoredToken(result.token);
         storeKeyPair(newKeyPair);
 
         setToken(result.token);
@@ -94,16 +158,17 @@ export function AuthProvider({ children }: { children: preact.ComponentChildren 
         return { success: false, error: message };
       }
     },
-    [registerMutation]
+    [registerMutation, deviceId]
   );
 
   const login = useCallback(
     async (email: string, password: string, forceGenerateNewKeys?: boolean): Promise<LoginResult> => {
       try {
-        // Get or create device ID for session binding (prevents session hijacking)
-        const deviceId = getOrCreateDeviceId();
+        const currentDeviceId = deviceId ?? getOrCreateDeviceId();
+        setDeviceId(currentDeviceId);
 
-        const result = await loginMutation({ email, password, deviceId });
+        // Get or create device ID for session binding (prevents session hijacking)
+        const result = await loginMutation({ email, password, deviceId: currentDeviceId });
 
         // Type the response properly
         const authResponse = result as {
@@ -123,6 +188,11 @@ export function AuthProvider({ children }: { children: preact.ComponentChildren 
               authResponse.encryptedPrivateKey,
               password
             );
+
+            if (!isKeyPairConsistent(authResponse.publicKey, privateKey)) {
+              throw new Error('Recovered private key does not match server public key');
+            }
+
             currentKeyPair = {
               publicKey: authResponse.publicKey,
               privateKey,
@@ -145,6 +215,7 @@ export function AuthProvider({ children }: { children: preact.ComponentChildren 
                 const encryptedPrivateKey = await encryptPrivateKeyWithPassword(currentKeyPair.privateKey, password);
                 await syncKeysMutation({
                   token: result.token,
+                  deviceId: currentDeviceId,
                   publicKey: currentKeyPair.publicKey,
                   encryptedPrivateKey
                 });
@@ -167,8 +238,15 @@ export function AuthProvider({ children }: { children: preact.ComponentChildren 
         if (!currentKeyPair && !authResponse.encryptedPrivateKey) {
           // Check localStorage as potential recovery (only if server has no keys)
           const localKeys = loadKeyPair();
+          const serverPublicKey = authResponse.publicKey;
+          const localMatchesServer = Boolean(
+            localKeys &&
+            serverPublicKey &&
+            localKeys.publicKey === serverPublicKey &&
+            isKeyPairConsistent(localKeys.publicKey, localKeys.privateKey)
+          );
 
-          if (localKeys) {
+          if (localMatchesServer && localKeys) {
             console.log('Using keys from localStorage (server had no backup)');
             currentKeyPair = localKeys;
 
@@ -181,6 +259,7 @@ export function AuthProvider({ children }: { children: preact.ComponentChildren 
               );
               await syncKeysMutation({
                 token: result.token,
+                deviceId: currentDeviceId,
                 publicKey: currentKeyPair.publicKey,
                 encryptedPrivateKey
               });
@@ -188,6 +267,11 @@ export function AuthProvider({ children }: { children: preact.ComponentChildren 
               console.error('Failed to backup keys to server:', e);
             }
           } else {
+            if (localKeys && !localMatchesServer) {
+              console.warn('Ignoring local keys because they do not match server public key');
+              clearKeyPair();
+            }
+
             // No keys anywhere - generate new ones with WARNING
             console.warn('No encryption keys found anywhere - generating new keys');
             currentKeyPair = generateKeyPair();
@@ -202,6 +286,7 @@ export function AuthProvider({ children }: { children: preact.ComponentChildren 
               );
               await syncKeysMutation({
                 token: result.token,
+                deviceId: currentDeviceId,
                 publicKey: currentKeyPair.publicKey,
                 encryptedPrivateKey
               });
@@ -212,9 +297,18 @@ export function AuthProvider({ children }: { children: preact.ComponentChildren 
         }
 
         // Store token and finalize
-        localStorage.setItem(TOKEN_STORAGE_KEY, result.token);
+        writeStoredToken(result.token);
         setToken(result.token);
         setKeyPair(currentKeyPair);
+
+        // Best-effort migration for historical messages missing sender key snapshots.
+        // This keeps decryption resilient after key updates for old records.
+        void backfillSenderPublicKeysMutation({
+          token: result.token,
+          deviceId: currentDeviceId,
+        }).catch((migrationError) => {
+          console.error('Failed to backfill sender key snapshots:', migrationError);
+        });
 
         return { success: true, warning };
       } catch (error: unknown) {
@@ -223,30 +317,34 @@ export function AuthProvider({ children }: { children: preact.ComponentChildren 
         return { success: false, error: message };
       }
     },
-    [loginMutation, syncKeysMutation]
+    [loginMutation, syncKeysMutation, backfillSenderPublicKeysMutation, deviceId]
   );
 
   const logout = useCallback(async () => {
+    const currentDeviceId = deviceId ?? getOrCreateDeviceId();
+    setDeviceId(currentDeviceId);
+
     if (token) {
       try {
-        await logoutMutation({ token });
+        await logoutMutation({ token, deviceId: currentDeviceId });
       } catch {
         // Ignore errors on logout
       }
     }
 
     // Clear storage
-    localStorage.removeItem(TOKEN_STORAGE_KEY);
+    clearStoredToken();
     clearKeyPair();
 
     setToken(null);
     setKeyPair(null);
-  }, [token, logoutMutation]);
+  }, [token, logoutMutation, deviceId]);
 
   return (
     <AuthContext.Provider
       value={{
         token,
+        deviceId,
         keyPair,
         isLoading,
         isAuthenticated: token !== null,

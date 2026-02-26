@@ -5,13 +5,14 @@ import { isUserOnline } from '../../lib/presence';
 
 interface ConversationListProps {
   token: string;
+  deviceId: string;
   selectedId: Id<'conversations'> | null;
   onSelect: (id: Id<'conversations'>) => void;
   currentUserId: Id<'users'>;
 }
 
-export function ConversationList({ token, selectedId, onSelect, currentUserId }: ConversationListProps) {
-  const conversations = useQuery(api.conversations.list, { token });
+export function ConversationList({ token, deviceId, selectedId, onSelect, currentUserId }: ConversationListProps) {
+  const conversations = useQuery(api.conversations.list, { token, deviceId });
 
   if (conversations === undefined) {
     return (

@@ -5,17 +5,18 @@ import { Id } from '../../../convex/_generated/dataModel';
 
 interface NewChatModalProps {
   token: string;
+  deviceId: string;
   onClose: () => void;
   onConversationCreated: (conversationId: Id<'conversations'>) => void;
 }
 
-export function NewChatModal({ token, onClose, onConversationCreated }: NewChatModalProps) {
+export function NewChatModal({ token, deviceId, onClose, onConversationCreated }: NewChatModalProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [isCreating, setIsCreating] = useState(false);
 
   const searchResults = useQuery(
     api.users.search,
-    searchQuery.length >= 2 ? { query: searchQuery, token } : 'skip'
+    searchQuery.length >= 2 ? { query: searchQuery, token, deviceId } : 'skip'
   );
 
   const getOrCreateConversation = useMutation(api.conversations.getOrCreate);
@@ -23,7 +24,7 @@ export function NewChatModal({ token, onClose, onConversationCreated }: NewChatM
   const handleSelectUser = async (userId: Id<'users'>) => {
     setIsCreating(true);
     try {
-      const result = await getOrCreateConversation({ token, otherUserId: userId });
+      const result = await getOrCreateConversation({ token, deviceId, otherUserId: userId });
       onConversationCreated(result._id);
     } catch (error) {
       console.error('Failed to create conversation:', error);

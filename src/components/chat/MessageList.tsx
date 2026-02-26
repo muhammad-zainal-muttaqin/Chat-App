@@ -6,6 +6,7 @@ interface Message {
   _id: Id<'messages'>;
   conversationId: Id<'conversations'>;
   senderId: Id<'users'>;
+  senderPublicKey?: string;
   ciphertext: string | null;
   ciphertextSelf?: string | null;
   nonce: string;
@@ -22,10 +23,11 @@ interface MessageListProps {
   otherUserPublicKey: string;
   currentUserPublicKey: string;
   token: string;
+  deviceId: string;
   plaintextCache?: Map<string, string>;
 }
 
-export function MessageList({ messages, currentUserId, otherUserPublicKey, currentUserPublicKey, token, plaintextCache }: MessageListProps) {
+export function MessageList({ messages, currentUserId, otherUserPublicKey, currentUserPublicKey, token, deviceId, plaintextCache }: MessageListProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -70,6 +72,7 @@ export function MessageList({ messages, currentUserId, otherUserPublicKey, curre
                     senderPublicKey={isOwn ? currentUserPublicKey : otherUserPublicKey}
                     recipientPublicKey={isOwn ? otherUserPublicKey : currentUserPublicKey}
                     token={token}
+                    deviceId={deviceId}
                     plaintextCache={plaintextCache}
                   />
                 </div>

@@ -2,12 +2,14 @@ import { useState, useMemo } from 'preact/hooks';
 import { useMutation } from 'convex/react';
 import { api } from '../../../convex/_generated/api';
 import { Id } from '../../../convex/_generated/dataModel';
-import { useEncryption } from '../../hooks/useEncryption';
+import { decryptMessage as decryptPayload, encryptMessage as encryptPayload } from '../../lib/crypto';
+import { useAuth } from '../../contexts/AuthContext';
 
 interface Message {
   _id: Id<'messages'>;
   conversationId: Id<'conversations'>;
   senderId: Id<'users'>;
+  senderPublicKey?: string;
   ciphertext: string | null;
   ciphertextSelf?: string | null;
   nonce: string;
@@ -24,22 +26,24 @@ interface MessageBubbleProps {
   senderPublicKey: string;
   recipientPublicKey: string;
   token: string;
+  deviceId: string;
   plaintextCache?: Map<string, string>;
 }
 
-export function MessageBubble({ message, isOwn, senderPublicKey, recipientPublicKey, token, plaintextCache }: MessageBubbleProps) {
-  const { decrypt, encrypt, keyPair } = useEncryption();
+export function MessageBubble({ message, isOwn, senderPublicKey, recipientPublicKey, token, deviceId, plaintextCache }: MessageBubbleProps) {
+  const { keyPair } = useAuth();
   const [showMenu, setShowMenu] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editText, setEditText] = useState('');
 
   const editMutation = useMutation(api.messages.edit);
   const deleteMutation = useMutation(api.messages.remove);
+  const effectiveSenderPublicKey = message.senderPublicKey || senderPublicKey;
 
   const decryptedContent = useMemo(() => {
     if (message.isDeleted || !message.ciphertext) return null;
     if (!keyPair) return '[Encryption keys not loaded]';
-    if (!senderPublicKey) return '[Sender key not available]';
+    if (!effectiveSenderPublicKey) return '[Sender key not available]';
 
     try {
       if (isOwn) {
@@ -48,7 +52,12 @@ export function MessageBubble({ message, isOwn, senderPublicKey, recipientPublic
         }
         if (message.ciphertextSelf && keyPair) {
           try {
-            const decrypted = decrypt(message.ciphertextSelf, message.nonce, keyPair.publicKey);
+            const decrypted = decryptPayload(
+              message.ciphertextSelf,
+              message.nonce,
+              effectiveSenderPublicKey,
+              keyPair.privateKey
+            );
             if (decrypted) return decrypted;
           } catch (e) {
             console.warn('Failed to decrypt self message:', e);
@@ -56,7 +65,12 @@ export function MessageBubble({ message, isOwn, senderPublicKey, recipientPublic
         }
         return '[Encrypted message]';
       } else {
-        const decrypted = decrypt(message.ciphertext, message.nonce, senderPublicKey);
+        const decrypted = decryptPayload(
+          message.ciphertext,
+          message.nonce,
+          effectiveSenderPublicKey,
+          keyPair.privateKey
+        );
         if (!decrypted) return '[Unable to decrypt]';
         return decrypted;
       }
@@ -64,20 +78,30 @@ export function MessageBubble({ message, isOwn, senderPublicKey, recipientPublic
       console.error('Decryption error:', error);
       return '[Unable to decrypt]';
     }
-  }, [message.ciphertext, message.ciphertextSelf, message.nonce, message.isDeleted, message._id, keyPair, senderPublicKey, isOwn, decrypt, plaintextCache]);
+  }, [message.ciphertext, message.ciphertextSelf, message.nonce, message.isDeleted, message._id, keyPair, effectiveSenderPublicKey, isOwn, plaintextCache]);
 
   const handleEdit = async () => {
-    if (!editText.trim() || !encrypt || !keyPair) return;
+    if (!editText.trim() || !keyPair) return;
 
-    const encryptedForRecipient = encrypt(editText.trim(), recipientPublicKey);
-    if (!encryptedForRecipient) return;
-
-    const encryptedForSelf = encrypt(editText.trim(), keyPair.publicKey, encryptedForRecipient.nonce);
-    if (!encryptedForSelf) return;
+    let encryptedForRecipient;
+    let encryptedForSelf;
+    try {
+      encryptedForRecipient = encryptPayload(editText.trim(), recipientPublicKey, keyPair.privateKey);
+      encryptedForSelf = encryptPayload(
+        editText.trim(),
+        keyPair.publicKey,
+        keyPair.privateKey,
+        encryptedForRecipient.nonce
+      );
+    } catch (error) {
+      console.error('Failed to encrypt edited message:', error);
+      return;
+    }
 
     try {
       await editMutation({
         token,
+        deviceId,
         messageId: message._id,
         ciphertext: encryptedForRecipient.ciphertext,
         ciphertextSelf: encryptedForSelf.ciphertext,
@@ -91,9 +115,9 @@ export function MessageBubble({ message, isOwn, senderPublicKey, recipientPublic
   };
 
   const handleDelete = async () => {
-    if (!confirm('Delete this message?')) return;
+    if (!confirm('Delete this message from your view?')) return;
     try {
-      await deleteMutation({ token, messageId: message._id });
+      await deleteMutation({ token, deviceId, messageId: message._id });
       setShowMenu(false);
       // Force UI update - Convex will auto-refresh via useQuery, but this ensures immediate feedback
     } catch (error) {
@@ -155,7 +179,7 @@ export function MessageBubble({ message, isOwn, senderPublicKey, recipientPublic
           )}
 
           {/* Menu trigger */}
-          {isOwn && !message.isDeleted && !isEditing && (
+          {!message.isDeleted && !isEditing && (
             <button
               onClick={() => setShowMenu(!showMenu)}
               class="absolute -left-8 top-1/2 -translate-y-1/2 p-1.5 opacity-0 group-hover:opacity-100 text-dark-400 hover:text-dark-600 dark:hover:text-dark-300 transition-all hidden sm:block"
@@ -187,7 +211,7 @@ export function MessageBubble({ message, isOwn, senderPublicKey, recipientPublic
         </div>
 
         {/* Context Menu */}
-        {showMenu && isOwn && !message.isDeleted && (
+        {showMenu && !message.isDeleted && (
           <>
             <div class="fixed inset-0 z-40" onClick={() => setShowMenu(false)} />
             <div class="absolute right-full mr-2 top-0 z-50 w-36 bg-white dark:bg-dark-800 rounded-xl shadow-lg border border-dark-200 dark:border-dark-700 py-1">
@@ -209,7 +233,7 @@ export function MessageBubble({ message, isOwn, senderPublicKey, recipientPublic
                 class="w-full px-3 py-2 text-left text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/10 flex items-center gap-2 transition-colors"
               >
                 <div class="i-carbon-trash-can w-4 h-4" />
-                Delete
+                Delete for Me
               </button>
             </div>
           </>

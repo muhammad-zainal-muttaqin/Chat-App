@@ -2,14 +2,50 @@ import { v } from 'convex/values';
 import { mutation, MutationCtx } from './_generated/server';
 // import { Id } from './_generated/dataModel';
 
+const BASE64_PATTERN = /^[A-Za-z0-9+/]+={0,2}$/;
+const NONCE_BASE64_LENGTH = 32; // 24-byte nonce encoded in base64
+const PUBLIC_KEY_BASE64_LENGTH = 44; // 32-byte key encoded in base64
+const MIN_CIPHERTEXT_BASE64_LENGTH = 24; // 16-byte nacl.box overhead encoded in base64
+
+function isBase64(value: string): boolean {
+  return value.length > 0 && value.length % 4 === 0 && BASE64_PATTERN.test(value);
+}
+
+function assertValidEncryptedPayload(
+  ciphertext: string,
+  nonce: string,
+  ciphertextSelf?: string
+): void {
+  if (!isBase64(ciphertext) || ciphertext.length < MIN_CIPHERTEXT_BASE64_LENGTH) {
+    throw new Error('Invalid ciphertext format');
+  }
+
+  if (!isBase64(nonce) || nonce.length !== NONCE_BASE64_LENGTH) {
+    throw new Error('Invalid nonce format');
+  }
+
+  if (
+    ciphertextSelf !== undefined &&
+    (!isBase64(ciphertextSelf) || ciphertextSelf.length < MIN_CIPHERTEXT_BASE64_LENGTH)
+  ) {
+    throw new Error('Invalid self-ciphertext format');
+  }
+}
+
+function assertValidPublicKey(publicKey: string): void {
+  if (!isBase64(publicKey) || publicKey.length !== PUBLIC_KEY_BASE64_LENGTH) {
+    throw new Error('Invalid sender public key');
+  }
+}
+
 // Helper to get current user from session token
-async function getCurrentUserId(ctx: MutationCtx, token: string) {
+async function getCurrentUserId(ctx: MutationCtx, token: string, deviceId: string) {
   const session = await ctx.db
     .query('sessions')
     .withIndex('by_token', q => q.eq('token', token))
     .first();
 
-  if (!session || session.expiresAt < Date.now()) {
+  if (!session || session.expiresAt < Date.now() || session.deviceId !== deviceId) {
     throw new Error('Not authenticated');
   }
 
@@ -20,13 +56,21 @@ async function getCurrentUserId(ctx: MutationCtx, token: string) {
 export const send = mutation({
   args: {
     token: v.string(),
+    deviceId: v.string(),
     conversationId: v.id('conversations'),
     ciphertext: v.string(), // Base64 encrypted message for recipient
     ciphertextSelf: v.optional(v.string()), // Base64 encrypted message for sender (self)
     nonce: v.string(), // Base64 nonce
   },
   handler: async (ctx, args) => {
-    const userId = await getCurrentUserId(ctx, args.token);
+    const userId = await getCurrentUserId(ctx, args.token, args.deviceId);
+    assertValidEncryptedPayload(args.ciphertext, args.nonce, args.ciphertextSelf);
+
+    const sender = await ctx.db.get(userId);
+    if (!sender) {
+      throw new Error('User not found');
+    }
+    assertValidPublicKey(sender.publicKey);
 
     // Verify user is participant
     const conversation = await ctx.db.get(args.conversationId);
@@ -38,9 +82,11 @@ export const send = mutation({
     const messageId = await ctx.db.insert('messages', {
       conversationId: args.conversationId,
       senderId: userId,
+      senderPublicKey: sender.publicKey,
       ciphertext: args.ciphertext,
       ciphertextSelf: args.ciphertextSelf,
       nonce: args.nonce,
+      deletedForUserIds: [],
       isDeleted: false,
       editedAt: null,
       deliveredAt: null,
@@ -50,6 +96,7 @@ export const send = mutation({
     // Update conversation updatedAt
     await ctx.db.patch(args.conversationId, {
       updatedAt: Date.now(),
+      hiddenForUserIds: [],
     });
 
     // Update sender's presence to online (since they just sent a message)
@@ -66,13 +113,21 @@ export const send = mutation({
 export const edit = mutation({
   args: {
     token: v.string(),
+    deviceId: v.string(),
     messageId: v.id('messages'),
     ciphertext: v.string(),
     ciphertextSelf: v.optional(v.string()),
     nonce: v.string(),
   },
   handler: async (ctx, args) => {
-    const userId = await getCurrentUserId(ctx, args.token);
+    const userId = await getCurrentUserId(ctx, args.token, args.deviceId);
+    assertValidEncryptedPayload(args.ciphertext, args.nonce, args.ciphertextSelf);
+
+    const sender = await ctx.db.get(userId);
+    if (!sender) {
+      throw new Error('User not found');
+    }
+    assertValidPublicKey(sender.publicKey);
 
     const message = await ctx.db.get(args.messageId);
     if (!message) {
@@ -85,7 +140,7 @@ export const edit = mutation({
     }
 
     // Cannot edit deleted message
-    if (message.isDeleted) {
+    if (message.isDeleted || (message.deletedForUserIds ?? []).includes(userId)) {
       throw new Error('Cannot edit deleted message');
     }
 
@@ -98,6 +153,7 @@ export const edit = mutation({
 
     // Update message (no history stored - privacy first)
     await ctx.db.patch(args.messageId, {
+      senderPublicKey: sender.publicKey,
       ciphertext: args.ciphertext,
       ciphertextSelf: args.ciphertextSelf,
       nonce: args.nonce,
@@ -112,28 +168,84 @@ export const edit = mutation({
 export const remove = mutation({
   args: {
     token: v.string(),
+    deviceId: v.string(),
     messageId: v.id('messages'),
   },
   handler: async (ctx, args) => {
-    const userId = await getCurrentUserId(ctx, args.token);
+    const userId = await getCurrentUserId(ctx, args.token, args.deviceId);
 
     const message = await ctx.db.get(args.messageId);
     if (!message) {
       throw new Error('Message not found');
     }
 
-    // Only sender can delete
-    if (message.senderId !== userId) {
-      throw new Error('Cannot delete message from another user');
+    const conversation = await ctx.db.get(message.conversationId);
+    if (!conversation || !conversation.participantIds.includes(userId)) {
+      throw new Error('Not authorized to delete this message');
     }
 
-    // Hard delete - remove ciphertext permanently
-    await ctx.db.patch(args.messageId, {
-      ciphertext: null,
-      isDeleted: true,
-    });
+    // Local delete: hide message only for the current user.
+    const deletedForUserIds = [...(message.deletedForUserIds ?? [])];
+    if (!deletedForUserIds.includes(userId)) {
+      deletedForUserIds.push(userId);
+    }
+
+    const allParticipantsDeleted = conversation.participantIds.every((participantId) =>
+      deletedForUserIds.includes(participantId)
+    );
+
+    if (allParticipantsDeleted) {
+      // If every participant deleted it, remove encrypted payload permanently.
+      await ctx.db.patch(args.messageId, {
+        deletedForUserIds,
+        ciphertext: null,
+        ciphertextSelf: null,
+        isDeleted: true,
+      });
+    } else {
+      await ctx.db.patch(args.messageId, {
+        deletedForUserIds,
+      });
+    }
 
     return { success: true };
+  },
+});
+
+// Backfill senderPublicKey for historical messages created before snapshot support.
+// Safe to run repeatedly: only updates rows that still miss senderPublicKey.
+export const backfillSenderPublicKeys = mutation({
+  args: {
+    token: v.string(),
+    deviceId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const userId = await getCurrentUserId(ctx, args.token, args.deviceId);
+    const sender = await ctx.db.get(userId);
+    if (!sender) {
+      throw new Error('User not found');
+    }
+    assertValidPublicKey(sender.publicKey);
+
+    const ownMessages = await ctx.db
+      .query('messages')
+      .withIndex('by_sender', q => q.eq('senderId', userId))
+      .collect();
+
+    let updated = 0;
+    for (const message of ownMessages) {
+      if (!message.senderPublicKey) {
+        await ctx.db.patch(message._id, {
+          senderPublicKey: sender.publicKey,
+        });
+        updated += 1;
+      }
+    }
+
+    return {
+      scanned: ownMessages.length,
+      updated,
+    };
   },
 });
 
@@ -141,10 +253,11 @@ export const remove = mutation({
 export const markDelivered = mutation({
   args: {
     token: v.string(),
+    deviceId: v.string(),
     messageId: v.id('messages'),
   },
   handler: async (ctx, args) => {
-    const userId = await getCurrentUserId(ctx, args.token);
+    const userId = await getCurrentUserId(ctx, args.token, args.deviceId);
 
     const message = await ctx.db.get(args.messageId);
     if (!message) return { success: false };
@@ -157,6 +270,9 @@ export const markDelivered = mutation({
 
     // Don't mark own messages
     if (message.senderId === userId) {
+      return { success: false };
+    }
+    if ((message.deletedForUserIds ?? []).includes(userId)) {
       return { success: false };
     }
 
@@ -175,10 +291,11 @@ export const markDelivered = mutation({
 export const markRead = mutation({
   args: {
     token: v.string(),
+    deviceId: v.string(),
     messageId: v.id('messages'),
   },
   handler: async (ctx, args) => {
-    const userId = await getCurrentUserId(ctx, args.token);
+    const userId = await getCurrentUserId(ctx, args.token, args.deviceId);
 
     const message = await ctx.db.get(args.messageId);
     if (!message) return { success: false };
@@ -191,6 +308,9 @@ export const markRead = mutation({
 
     // Don't mark own messages
     if (message.senderId === userId) {
+      return { success: false };
+    }
+    if ((message.deletedForUserIds ?? []).includes(userId)) {
       return { success: false };
     }
 
@@ -215,10 +335,11 @@ export const markRead = mutation({
 export const markAllRead = mutation({
   args: {
     token: v.string(),
+    deviceId: v.string(),
     conversationId: v.id('conversations'),
   },
   handler: async (ctx, args) => {
-    const userId = await getCurrentUserId(ctx, args.token);
+    const userId = await getCurrentUserId(ctx, args.token, args.deviceId);
 
     // Verify user is participant
     const conversation = await ctx.db.get(args.conversationId);
@@ -227,7 +348,7 @@ export const markAllRead = mutation({
     }
 
     // Get all unread messages from other user
-    const unreadMessages = await ctx.db
+    const unreadMessagesRaw = await ctx.db
       .query('messages')
       .withIndex('by_conversation', q => q.eq('conversationId', args.conversationId))
       .filter(q =>
@@ -237,6 +358,9 @@ export const markAllRead = mutation({
         )
       )
       .collect();
+    const unreadMessages = unreadMessagesRaw.filter((message) =>
+      !(message.deletedForUserIds ?? []).includes(userId)
+    );
 
     // Mark all as read
     const now = Date.now();

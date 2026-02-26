@@ -7,6 +7,39 @@ export interface KeyPair {
   privateKey: Uint8Array; // Keep as bytes, never serialize
 }
 
+const PUBLIC_KEY_LENGTH = nacl.box.publicKeyLength;
+const PRIVATE_KEY_LENGTH = nacl.box.secretKeyLength;
+const NONCE_LENGTH = nacl.box.nonceLength;
+const MIN_CIPHERTEXT_LENGTH = nacl.box.overheadLength;
+
+function decodeBase64Strict(value: string, fieldName: string): Uint8Array {
+  try {
+    return decodeBase64(value);
+  } catch {
+    throw new Error(`${fieldName} is not valid base64`);
+  }
+}
+
+function assertByteLength(bytes: Uint8Array, expected: number, fieldName: string): void {
+  if (bytes.length !== expected) {
+    throw new Error(`${fieldName} has invalid length`);
+  }
+}
+
+export function derivePublicKeyFromPrivateKey(privateKey: Uint8Array): string {
+  assertByteLength(privateKey, PRIVATE_KEY_LENGTH, 'Private key');
+  const derived = nacl.box.keyPair.fromSecretKey(privateKey);
+  return encodeBase64(derived.publicKey);
+}
+
+export function isKeyPairConsistent(publicKey: string, privateKey: Uint8Array): boolean {
+  try {
+    return derivePublicKeyFromPrivateKey(privateKey) === publicKey;
+  } catch {
+    return false;
+  }
+}
+
 // Initialize crypto (no-op for tweetnacl, but kept for API compatibility)
 export async function initCrypto(): Promise<void> {
   // tweetnacl is synchronous, no initialization needed
@@ -24,7 +57,9 @@ export function generateKeyPair(): KeyPair {
 
 // Convert base64 public key to Uint8Array
 export function publicKeyFromBase64(base64: string): Uint8Array {
-  return decodeBase64(base64);
+  const publicKey = decodeBase64Strict(base64, 'Public key');
+  assertByteLength(publicKey, PUBLIC_KEY_LENGTH, 'Public key');
+  return publicKey;
 }
 
 // Encrypted message interface
@@ -40,16 +75,22 @@ export function encryptMessage(
   senderPrivateKey: Uint8Array,
   providedNonce?: string // Base64
 ): EncryptedMessage {
+  if (!plaintext) {
+    throw new Error('Cannot encrypt empty message');
+  }
+
+  assertByteLength(senderPrivateKey, PRIVATE_KEY_LENGTH, 'Sender private key');
+
+  const recipientPubKeyBytes = publicKeyFromBase64(recipientPublicKey);
+
   // Use provided nonce or generate random nonce
   const nonce = providedNonce
-    ? decodeBase64(providedNonce)
-    : nacl.randomBytes(nacl.box.nonceLength);
+    ? decodeBase64Strict(providedNonce, 'Nonce')
+    : nacl.randomBytes(NONCE_LENGTH);
+  assertByteLength(nonce, NONCE_LENGTH, 'Nonce');
 
   // Convert plaintext to bytes
   const message = decodeUTF8(plaintext);
-
-  // Convert recipient public key from base64
-  const recipientPubKeyBytes = decodeBase64(recipientPublicKey);
 
   // Encrypt
   const ciphertext = nacl.box(
@@ -73,10 +114,18 @@ export function decryptMessage(
   recipientPrivateKey: Uint8Array
 ): string {
   try {
+    assertByteLength(recipientPrivateKey, PRIVATE_KEY_LENGTH, 'Recipient private key');
+
     // Convert from base64
-    const ciphertextBytes = decodeBase64(ciphertext);
-    const nonceBytes = decodeBase64(nonce);
-    const senderPubKeyBytes = decodeBase64(senderPublicKey);
+    const ciphertextBytes = decodeBase64Strict(ciphertext, 'Ciphertext');
+    const nonceBytes = decodeBase64Strict(nonce, 'Nonce');
+    const senderPubKeyBytes = publicKeyFromBase64(senderPublicKey);
+
+    assertByteLength(nonceBytes, NONCE_LENGTH, 'Nonce');
+
+    if (ciphertextBytes.length < MIN_CIPHERTEXT_LENGTH) {
+      throw new Error('Ciphertext is too short');
+    }
 
     // Decrypt
     const decrypted = nacl.box.open(
@@ -101,31 +150,112 @@ export function decryptMessage(
 const PRIVATE_KEY_STORAGE_KEY = 'privacy_chat_private_key';
 const PUBLIC_KEY_STORAGE_KEY = 'privacy_chat_public_key';
 
+function canUseStorage(storage: Storage | undefined): storage is Storage {
+  if (!storage) return false;
+  try {
+    const probeKey = '__privacy_chat_probe__';
+    storage.setItem(probeKey, '1');
+    storage.removeItem(probeKey);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function getSessionStorageSafe(): Storage | undefined {
+  const maybeSessionStorage = (globalThis as { sessionStorage?: Storage }).sessionStorage;
+  return canUseStorage(maybeSessionStorage) ? maybeSessionStorage : undefined;
+}
+
+function getLocalStorageSafe(): Storage | undefined {
+  const maybeLocalStorage = (globalThis as { localStorage?: Storage }).localStorage;
+  return canUseStorage(maybeLocalStorage) ? maybeLocalStorage : undefined;
+}
+
+function getPreferredKeyStorage(): Storage | null {
+  return getSessionStorageSafe() ?? getLocalStorageSafe() ?? null;
+}
+
 // Store keys securely (using IndexedDB would be better in production)
 export function storeKeyPair(keyPair: KeyPair): void {
+  assertByteLength(keyPair.privateKey, PRIVATE_KEY_LENGTH, 'Private key');
+  if (!isKeyPairConsistent(keyPair.publicKey, keyPair.privateKey)) {
+    throw new Error('Refusing to store inconsistent key pair');
+  }
+
+  const storage = getPreferredKeyStorage();
+  if (!storage) {
+    throw new Error('No browser storage available for key persistence');
+  }
+
   // Store private key as base64 (in production, use encrypted IndexedDB)
   const privateKeyBase64 = encodeBase64(keyPair.privateKey);
-  localStorage.setItem(PRIVATE_KEY_STORAGE_KEY, privateKeyBase64);
-  localStorage.setItem(PUBLIC_KEY_STORAGE_KEY, keyPair.publicKey);
+  storage.setItem(PRIVATE_KEY_STORAGE_KEY, privateKeyBase64);
+  storage.setItem(PUBLIC_KEY_STORAGE_KEY, keyPair.publicKey);
+
+  // If we are using sessionStorage, clear old localStorage copies.
+  const localStorageSafe = getLocalStorageSafe();
+  if (localStorageSafe && storage !== localStorageSafe) {
+    localStorageSafe.removeItem(PRIVATE_KEY_STORAGE_KEY);
+    localStorageSafe.removeItem(PUBLIC_KEY_STORAGE_KEY);
+  }
 }
 
 // Load stored key pair
 export function loadKeyPair(): KeyPair | null {
-  const privateKeyBase64 = localStorage.getItem(PRIVATE_KEY_STORAGE_KEY);
-  const publicKey = localStorage.getItem(PUBLIC_KEY_STORAGE_KEY);
+  const preferredStorage = getPreferredKeyStorage();
+  const fallbackLocalStorage = getLocalStorageSafe();
 
-  if (!privateKeyBase64 || !publicKey) return null;
+  const privateKeyBase64 = preferredStorage?.getItem(PRIVATE_KEY_STORAGE_KEY) ?? null;
+  const publicKey = preferredStorage?.getItem(PUBLIC_KEY_STORAGE_KEY) ?? null;
 
-  return {
-    publicKey,
-    privateKey: decodeBase64(privateKeyBase64),
-  };
+  let resolvedPrivateKey = privateKeyBase64;
+  let resolvedPublicKey = publicKey;
+
+  // Migration path: pull old keys from localStorage if preferred storage is sessionStorage.
+  if ((!resolvedPrivateKey || !resolvedPublicKey) && fallbackLocalStorage) {
+    resolvedPrivateKey = fallbackLocalStorage.getItem(PRIVATE_KEY_STORAGE_KEY);
+    resolvedPublicKey = fallbackLocalStorage.getItem(PUBLIC_KEY_STORAGE_KEY);
+    if (resolvedPrivateKey && resolvedPublicKey && preferredStorage && preferredStorage !== fallbackLocalStorage) {
+      preferredStorage.setItem(PRIVATE_KEY_STORAGE_KEY, resolvedPrivateKey);
+      preferredStorage.setItem(PUBLIC_KEY_STORAGE_KEY, resolvedPublicKey);
+      fallbackLocalStorage.removeItem(PRIVATE_KEY_STORAGE_KEY);
+      fallbackLocalStorage.removeItem(PUBLIC_KEY_STORAGE_KEY);
+    }
+  }
+
+  if (!resolvedPrivateKey || !resolvedPublicKey) return null;
+
+  try {
+    const privateKey = decodeBase64Strict(resolvedPrivateKey, 'Private key');
+    const decodedPublicKey = publicKeyFromBase64(resolvedPublicKey);
+
+    assertByteLength(privateKey, PRIVATE_KEY_LENGTH, 'Private key');
+    assertByteLength(decodedPublicKey, PUBLIC_KEY_LENGTH, 'Public key');
+
+    if (!isKeyPairConsistent(resolvedPublicKey, privateKey)) {
+      throw new Error('Stored key pair is inconsistent');
+    }
+
+    return {
+      publicKey: resolvedPublicKey,
+      privateKey,
+    };
+  } catch (error) {
+    console.error('Invalid local key pair detected. Clearing corrupted keys.', error);
+    clearKeyPair();
+    return null;
+  }
 }
 
 // Clear stored keys (on logout)
 export function clearKeyPair(): void {
-  localStorage.removeItem(PRIVATE_KEY_STORAGE_KEY);
-  localStorage.removeItem(PUBLIC_KEY_STORAGE_KEY);
+  const sessionStorageSafe = getSessionStorageSafe();
+  const localStorageSafe = getLocalStorageSafe();
+  sessionStorageSafe?.removeItem(PRIVATE_KEY_STORAGE_KEY);
+  sessionStorageSafe?.removeItem(PUBLIC_KEY_STORAGE_KEY);
+  localStorageSafe?.removeItem(PRIVATE_KEY_STORAGE_KEY);
+  localStorageSafe?.removeItem(PUBLIC_KEY_STORAGE_KEY);
 }
 
 // Device ID for session binding (prevents session hijacking)
@@ -170,6 +300,13 @@ export function getOrCreateKeyPair(): KeyPair {
 
 // Derive a key from password using PBKDF2
 async function deriveKeyFromPassword(password: string, salt: Uint8Array): Promise<CryptoKey> {
+  if (!password) {
+    throw new Error('Password is required');
+  }
+  if (salt.length !== 16) {
+    throw new Error('Salt must be 16 bytes');
+  }
+
   const enc = new TextEncoder();
   const passwordKey = await window.crypto.subtle.importKey(
     'raw',
@@ -195,6 +332,8 @@ async function deriveKeyFromPassword(password: string, salt: Uint8Array): Promis
 
 // Encrypt private key with password
 export async function encryptPrivateKeyWithPassword(privateKey: Uint8Array, password: string): Promise<string> {
+  assertByteLength(privateKey, PRIVATE_KEY_LENGTH, 'Private key');
+
   const salt = window.crypto.getRandomValues(new Uint8Array(16));
   const iv = window.crypto.getRandomValues(new Uint8Array(12));
 
@@ -221,7 +360,10 @@ export async function encryptPrivateKeyWithPassword(privateKey: Uint8Array, pass
 // Decrypt private key with password
 export async function decryptPrivateKeyWithPassword(encryptedBase64: string, password: string): Promise<Uint8Array> {
   try {
-    const combined = decodeBase64(encryptedBase64);
+    const combined = decodeBase64Strict(encryptedBase64, 'Encrypted private key');
+    if (combined.length <= 28) {
+      throw new Error('Encrypted private key payload is too short');
+    }
 
     // Extract parts
     const salt = combined.slice(0, 16);
@@ -239,7 +381,9 @@ export async function decryptPrivateKeyWithPassword(encryptedBase64: string, pas
       data
     );
 
-    return new Uint8Array(decrypted);
+    const decryptedKey = new Uint8Array(decrypted);
+    assertByteLength(decryptedKey, PRIVATE_KEY_LENGTH, 'Decrypted private key');
+    return decryptedKey;
   } catch (error) {
     console.error('Failed to decrypt private key:', error);
     throw new Error('Password salah atau data korup');

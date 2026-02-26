@@ -2,36 +2,44 @@ import { useState } from 'preact/hooks';
 import { useMutation } from 'convex/react';
 import { api } from '../../../convex/_generated/api';
 import { Id } from '../../../convex/_generated/dataModel';
-import { useEncryption } from '../../hooks/useEncryption';
+import { encryptMessage as encryptPayload } from '../../lib/crypto';
+import { useAuth } from '../../contexts/AuthContext';
 
 interface MessageInputProps {
   conversationId: Id<'conversations'>;
   recipientPublicKey: string;
   token: string;
+  deviceId: string;
   onMessageSent?: (messageId: string, plaintext: string) => void;
 }
 
-export function MessageInput({ conversationId, recipientPublicKey, token, onMessageSent }: MessageInputProps) {
+export function MessageInput({ conversationId, recipientPublicKey, token, deviceId, onMessageSent }: MessageInputProps) {
   const [message, setMessage] = useState('');
   const [isSending, setIsSending] = useState(false);
-  const { encrypt, hasKeys, keyPair } = useEncryption();
+  const { keyPair } = useAuth();
   const sendMessage = useMutation(api.messages.send);
+  const hasKeys = keyPair !== null;
 
   const handleSubmit = async (e: Event) => {
     e.preventDefault();
 
     const text = message.trim();
-    if (!text || !hasKeys || !recipientPublicKey || !keyPair) return;
-
-    const encryptedForRecipient = encrypt(text, recipientPublicKey);
-    if (!encryptedForRecipient) {
-      console.error('Failed to encrypt message for recipient');
+    if (!text || !hasKeys || !recipientPublicKey || !keyPair) {
       return;
     }
 
-    const encryptedForSelf = encrypt(text, keyPair.publicKey, encryptedForRecipient.nonce);
-    if (!encryptedForSelf) {
-      console.error('Failed to encrypt message for self');
+    let encryptedForRecipient;
+    let encryptedForSelf;
+    try {
+      encryptedForRecipient = encryptPayload(text, recipientPublicKey, keyPair.privateKey);
+      encryptedForSelf = encryptPayload(
+        text,
+        keyPair.publicKey,
+        keyPair.privateKey,
+        encryptedForRecipient.nonce
+      );
+    } catch (error) {
+      console.error('Failed to encrypt message payload:', error);
       return;
     }
 
@@ -41,6 +49,7 @@ export function MessageInput({ conversationId, recipientPublicKey, token, onMess
     try {
       const result = await sendMessage({
         token,
+        deviceId,
         conversationId,
         ciphertext: encryptedForRecipient.ciphertext,
         ciphertextSelf: encryptedForSelf.ciphertext,

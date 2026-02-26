@@ -28,6 +28,7 @@
   "scripts": {
     "dev": "vite",
     "build": "bunx tsc && bunx vite build",
+    "test:e2ee": "bun test tests/e2ee.smoke.test.ts",
     "deploy-convex": "bunx convex deploy",
     "preview": "vite preview"
   },

@@ -32,6 +32,7 @@ export default defineSchema({
   // Conversations (1-to-1)
   conversations: defineTable({
     participantIds: v.array(v.id('users')),
+    hiddenForUserIds: v.optional(v.array(v.id('users'))), // Local delete/hide conversation
     createdAt: v.number(),
     updatedAt: v.number(),
   })
@@ -41,13 +42,16 @@ export default defineSchema({
   messages: defineTable({
     conversationId: v.id('conversations'),
     senderId: v.id('users'),
+    senderPublicKey: v.optional(v.string()), // Public key snapshot when message was encrypted
     ciphertext: v.union(v.string(), v.null()), // Encrypted for recipient
     ciphertextSelf: v.optional(v.union(v.string(), v.null())), // Encrypted for sender (self)
     nonce: v.string(), // Shared nonce
+    deletedForUserIds: v.optional(v.array(v.id('users'))), // Local delete ("delete for me")
     isDeleted: v.boolean(),
     editedAt: v.union(v.number(), v.null()),
     deliveredAt: v.union(v.number(), v.null()),
     readAt: v.union(v.number(), v.null()),
   })
-    .index('by_conversation', ['conversationId']),
+    .index('by_conversation', ['conversationId'])
+    .index('by_sender', ['senderId']),
 });
