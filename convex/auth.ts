@@ -193,7 +193,7 @@ export const login = mutation({
       .collect();
 
     for (const existingSession of existingSessions) {
-      if (existingSession.deviceId === args.deviceId) {
+      if (!existingSession.deviceId || existingSession.deviceId === args.deviceId) {
         await ctx.db.delete(existingSession._id);
       }
     }
@@ -251,6 +251,7 @@ export const validateSession = query({
 
     if (!session) return null;
     if (session.expiresAt < Date.now()) return null;
+    if (!session.deviceId) return null;
 
     // SECURITY: Validate device ID to prevent session hijacking
     // If someone copies the token to another device, this check will fail
@@ -280,7 +281,7 @@ export const updatePublicKey = mutation({
       .withIndex('by_token', q => q.eq('token', args.token))
       .first();
 
-    if (!session || session.expiresAt < Date.now() || session.deviceId !== args.deviceId) {
+    if (!session || !session.deviceId || session.expiresAt < Date.now() || session.deviceId !== args.deviceId) {
       throw new Error('Not authenticated');
     }
 

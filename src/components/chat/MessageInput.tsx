@@ -76,9 +76,9 @@ export function MessageInput({ conversationId, recipientPublicKey, token, device
 
   if (!recipientPublicKey) {
     return (
-      <div class="p-4">
-        <div class="flex items-center justify-center gap-2 text-dark-500 text-sm max-w-3xl mx-auto px-5 py-3 rounded-full bg-white dark:bg-dark-800 shadow-lg shadow-black/5 dark:shadow-black/20">
-          <div class="i-carbon-warning w-5 h-5" />
+      <div class="px-4 py-3 border-t border-dark-100 dark:border-dark-800/60">
+        <div class="flex items-center justify-center gap-2 text-dark-400 text-xs max-w-3xl mx-auto px-4 py-2.5 rounded-xl bg-dark-50 dark:bg-dark-800/50">
+          <div class="i-carbon-warning w-4 h-4" />
           <span>Recipient key unavailable</span>
         </div>
       </div>
@@ -88,14 +88,14 @@ export function MessageInput({ conversationId, recipientPublicKey, token, device
   const isButtonActive = message.trim() && hasKeys;
 
   return (
-    <div class="p-4 flex-shrink-0">
-      <form onSubmit={handleSubmit} class="flex items-center gap-3 max-w-3xl mx-auto">
+    <div class="px-4 py-3 flex-shrink-0 border-t border-dark-100 dark:border-dark-800/60 bg-white/40 dark:bg-dark-900/40 backdrop-blur-xl">
+      <form onSubmit={handleSubmit} class="flex items-center gap-2.5 max-w-3xl mx-auto">
         <input
           type="text"
           value={message}
           onInput={(e) => setMessage((e.target as HTMLInputElement).value)}
           onKeyDown={handleKeyDown}
-          class="flex-1 px-5 py-3 rounded-full bg-white dark:bg-dark-800 text-dark-900 dark:text-white focus:outline-none shadow-lg shadow-black/5 dark:shadow-black/20 text-sm placeholder-dark-400 border-0"
+          class="flex-1 px-4 py-2.5 rounded-xl bg-dark-50 dark:bg-dark-800 text-dark-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500/20 text-[13px] placeholder-dark-400 dark:placeholder-dark-500 border border-dark-200/60 dark:border-dark-700/60 transition-all"
           placeholder="Type a message..."
           disabled={isSending}
         />
@@ -103,23 +103,22 @@ export function MessageInput({ conversationId, recipientPublicKey, token, device
         <button
           type="submit"
           disabled={!isButtonActive || isSending}
-          class={`w-11 h-11 rounded-full flex items-center justify-center transition-all duration-200 flex-shrink-0 ${
+          class={`w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-200 flex-shrink-0 ${
             isButtonActive
-              ? 'bg-primary-600 text-white hover:bg-primary-700 dark:bg-primary-500 dark:hover:bg-primary-400 shadow-lg shadow-primary-600/50 dark:shadow-primary-500/60 ring-2 ring-primary-600/30 dark:ring-primary-500/30'
-              : 'bg-dark-200 dark:bg-dark-700 text-dark-400 cursor-not-allowed'
+              ? 'bg-primary-600 text-white hover:bg-primary-700 shadow-sm'
+              : 'bg-dark-100 dark:bg-dark-800 text-dark-300 dark:text-dark-600 cursor-not-allowed'
           }`}
-          style={isButtonActive ? { backgroundColor: '#2563eb' } : undefined}
         >
           {isSending ? (
-            <div class="i-carbon-circle-dash w-5 h-5 animate-spin" />
+            <div class="i-carbon-circle-dash w-4 h-4 animate-spin" />
           ) : (
-            <div class="i-carbon-send-filled w-5 h-5" />
+            <div class="i-carbon-send-filled w-4 h-4" />
           )}
         </button>
       </form>
 
       {!hasKeys && (
-        <p class="mt-2 text-center text-xs text-amber-600 dark:text-amber-400">
+        <p class="mt-2 text-center text-[10px] text-amber-600 dark:text-amber-400">
           Encryption keys not loaded
         </p>
       )}

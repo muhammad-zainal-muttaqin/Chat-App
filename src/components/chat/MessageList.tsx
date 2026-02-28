@@ -42,14 +42,14 @@ export function MessageList({ messages, currentUserId, otherUserPublicKey, curre
       <div class="max-w-3xl mx-auto px-4 py-6">
         {sortedMessages.length === 0 ? (
           <div class="flex flex-col items-center justify-center py-20 text-center">
-            <div class="w-14 h-14 rounded-2xl bg-dark-100 dark:bg-dark-800 flex-center mb-4">
-              <div class="i-carbon-locked w-6 h-6 text-dark-400" />
+            <div class="w-12 h-12 rounded-2xl bg-dark-100 dark:bg-dark-800 flex-center mb-3">
+              <div class="i-carbon-locked w-5 h-5 text-dark-300 dark:text-dark-600" />
             </div>
-            <p class="text-sm text-dark-500 dark:text-dark-400">No messages yet</p>
-            <p class="text-xs text-dark-400 dark:text-dark-500 mt-1">Start the conversation</p>
+            <p class="text-sm text-dark-400 dark:text-dark-500 font-medium">No messages yet</p>
+            <p class="text-xs text-dark-300 dark:text-dark-600 mt-1">Start the conversation</p>
           </div>
         ) : (
-          <div class="space-y-3">
+          <div class="space-y-2.5">
             {sortedMessages.map((message, index) => {
               const isOwn = message.senderId === currentUserId;
               const showDate = shouldShowDate(
@@ -60,8 +60,8 @@ export function MessageList({ messages, currentUserId, otherUserPublicKey, curre
               return (
                 <div key={`${message._id}-${message.isDeleted}-${message.editedAt || ''}`}>
                   {showDate && (
-                    <div class="flex justify-center my-6">
-                      <span class="px-3 py-1 bg-dark-100 dark:bg-dark-800 rounded-full text-xs text-dark-500 dark:text-dark-400">
+                    <div class="flex justify-center my-5">
+                      <span class="px-3 py-1 bg-dark-100/80 dark:bg-dark-800/80 rounded-full text-[10px] font-medium text-dark-400 dark:text-dark-500 backdrop-blur-sm">
                         {formatDate(message.createdAt)}
                       </span>
                     </div>

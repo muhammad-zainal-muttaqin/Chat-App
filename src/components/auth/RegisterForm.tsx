@@ -72,7 +72,7 @@ export function RegisterForm({ onSwitchToLogin }: RegisterFormProps) {
     <form onSubmit={handleSubmit} class="space-y-4">
       <div class="space-y-3">
         <div>
-          <label class="block text-sm font-medium text-dark-700 dark:text-dark-300 mb-1.5">
+          <label class="block text-xs font-medium text-dark-600 dark:text-dark-400 mb-1.5 uppercase tracking-wide">
             Name
           </label>
           <input
@@ -87,7 +87,7 @@ export function RegisterForm({ onSwitchToLogin }: RegisterFormProps) {
         </div>
 
         <div>
-          <label class="block text-sm font-medium text-dark-700 dark:text-dark-300 mb-1.5">
+          <label class="block text-xs font-medium text-dark-600 dark:text-dark-400 mb-1.5 uppercase tracking-wide">
             Email
           </label>
           <input
@@ -102,7 +102,7 @@ export function RegisterForm({ onSwitchToLogin }: RegisterFormProps) {
         </div>
 
         <div>
-          <label class="block text-sm font-medium text-dark-700 dark:text-dark-300 mb-1.5">
+          <label class="block text-xs font-medium text-dark-600 dark:text-dark-400 mb-1.5 uppercase tracking-wide">
             Password
           </label>
           <input
@@ -118,7 +118,7 @@ export function RegisterForm({ onSwitchToLogin }: RegisterFormProps) {
         </div>
 
         <div>
-          <label class="block text-sm font-medium text-dark-700 dark:text-dark-300 mb-1.5">
+          <label class="block text-xs font-medium text-dark-600 dark:text-dark-400 mb-1.5 uppercase tracking-wide">
             Confirm Password
           </label>
           <input
@@ -134,8 +134,8 @@ export function RegisterForm({ onSwitchToLogin }: RegisterFormProps) {
       </div>
 
       {error && (
-        <div class="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl text-red-600 dark:text-red-400 text-sm flex items-center gap-2">
-          <div class="i-carbon-warning-filled w-5 h-5" />
+        <div class="p-3 bg-red-50 dark:bg-red-950/30 border border-red-200/60 dark:border-red-800/40 rounded-xl text-red-600 dark:text-red-400 text-xs leading-relaxed flex items-center gap-2">
+          <div class="i-carbon-warning-filled w-4 h-4 flex-shrink-0" />
           {error}
         </div>
       )}
@@ -147,7 +147,7 @@ export function RegisterForm({ onSwitchToLogin }: RegisterFormProps) {
       >
         {isLoading ? (
           <span class="flex items-center gap-2">
-            <div class="i-carbon-circle-dash w-5 h-5 animate-spin" />
+            <div class="i-carbon-circle-dash w-4 h-4 animate-spin" />
             Creating account...
           </span>
         ) : (
@@ -155,7 +155,7 @@ export function RegisterForm({ onSwitchToLogin }: RegisterFormProps) {
         )}
       </button>
 
-      <p class="text-center text-sm text-dark-500 dark:text-dark-400">
+      <p class="text-center text-xs text-dark-400 dark:text-dark-500">
         Already have an account?{' '}
         <button
           type="button"

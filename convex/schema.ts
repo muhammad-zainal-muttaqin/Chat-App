@@ -22,7 +22,7 @@ export default defineSchema({
   sessions: defineTable({
     userId: v.id('users'),
     token: v.string(),
-    deviceId: v.string(), // Unique device identifier to prevent session hijacking
+    deviceId: v.optional(v.string()), // Optional for legacy rows, enforced in runtime checks
     expiresAt: v.number(),
     createdAt: v.number(),
   })

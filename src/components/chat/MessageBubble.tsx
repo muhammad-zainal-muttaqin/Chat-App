@@ -119,7 +119,6 @@ export function MessageBubble({ message, isOwn, senderPublicKey, recipientPublic
     try {
       await deleteMutation({ token, deviceId, messageId: message._id });
       setShowMenu(false);
-      // Force UI update - Convex will auto-refresh via useQuery, but this ensures immediate feedback
     } catch (error) {
       console.error('Failed to delete message:', error);
       alert('Failed to delete message. Please try again.');
@@ -134,17 +133,17 @@ export function MessageBubble({ message, isOwn, senderPublicKey, recipientPublic
         {/* Message bubble */}
         <div
           class={`
-            relative group px-4 py-2.5 rounded-2xl
+            relative group px-3.5 py-2.5 rounded-2xl
             ${isOwn
-              ? 'bg-primary-500 text-white rounded-br-md'
-              : 'bg-white dark:bg-dark-800 text-dark-900 dark:text-dark-100 rounded-bl-md border border-dark-200 dark:border-dark-700'
+              ? 'bg-primary-600 text-white rounded-br-lg'
+              : 'bg-white dark:bg-dark-800 text-dark-900 dark:text-dark-100 rounded-bl-lg border border-dark-100 dark:border-dark-700/60'
             }
-            ${message.isDeleted ? 'opacity-60' : ''}
+            ${message.isDeleted ? 'opacity-50' : ''}
           `}
         >
           {message.isDeleted ? (
-            <p class="text-sm italic flex items-center gap-2">
-              <div class="i-carbon-trash-can w-4 h-4 opacity-70" />
+            <p class="text-[13px] italic flex items-center gap-1.5 opacity-80">
+              <div class="i-carbon-trash-can w-3.5 h-3.5" />
               Message deleted
             </p>
           ) : isEditing ? (
@@ -153,27 +152,27 @@ export function MessageBubble({ message, isOwn, senderPublicKey, recipientPublic
                 type="text"
                 value={editText}
                 onInput={(e) => setEditText((e.target as HTMLInputElement).value)}
-                class="w-full px-3 py-2 rounded-lg bg-white/20 text-inherit placeholder-white/60 focus:outline-none text-sm"
+                class="w-full px-3 py-1.5 rounded-lg bg-white/20 text-inherit placeholder-white/60 focus:outline-none text-[13px]"
                 placeholder="Edit message..."
                 autoFocus
               />
-              <div class="flex gap-2 justify-end">
+              <div class="flex gap-1.5 justify-end">
                 <button
                   onClick={() => setIsEditing(false)}
-                  class="px-3 py-1.5 rounded-lg text-xs hover:bg-white/10 transition-colors"
+                  class="px-2.5 py-1 rounded-md text-xs hover:bg-white/10 transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={handleEdit}
-                  class="px-3 py-1.5 rounded-lg text-xs bg-white text-primary-600 font-medium"
+                  class="px-2.5 py-1 rounded-md text-xs bg-white text-primary-600 font-medium"
                 >
                   Save
                 </button>
               </div>
             </div>
           ) : (
-            <p class="text-sm leading-relaxed whitespace-pre-wrap break-words">
+            <p class="text-[13px] leading-relaxed whitespace-pre-wrap break-words">
               {decryptedContent || '[Encrypted message]'}
             </p>
           )}
@@ -182,29 +181,29 @@ export function MessageBubble({ message, isOwn, senderPublicKey, recipientPublic
           {!message.isDeleted && !isEditing && (
             <button
               onClick={() => setShowMenu(!showMenu)}
-              class="absolute -left-8 top-1/2 -translate-y-1/2 p-1.5 opacity-0 group-hover:opacity-100 text-dark-400 hover:text-dark-600 dark:hover:text-dark-300 transition-all hidden sm:block"
+              class="absolute -left-7 top-1/2 -translate-y-1/2 p-1 opacity-0 group-hover:opacity-100 text-dark-300 hover:text-dark-500 dark:text-dark-600 dark:hover:text-dark-400 transition-all hidden sm:block"
             >
-              <div class="i-carbon-overflow-menu-vertical w-4 h-4" />
+              <div class="i-carbon-overflow-menu-vertical w-3.5 h-3.5" />
             </button>
           )}
         </div>
 
         {/* Meta */}
-        <div class={`flex items-center gap-2 mt-1 px-1 ${isOwn ? 'justify-end' : 'justify-start'}`}>
-          <span class="text-[10px] text-dark-400 dark:text-dark-500">
+        <div class={`flex items-center gap-1.5 mt-1 px-1 ${isOwn ? 'justify-end' : 'justify-start'}`}>
+          <span class="text-[10px] text-dark-400 dark:text-dark-500 tabular-nums">
             {formatTime(message.createdAt)}
           </span>
           {message.editedAt && (
-            <span class="text-[10px] text-dark-400 dark:text-dark-500">· Edited</span>
+            <span class="text-[10px] text-dark-400 dark:text-dark-500">· edited</span>
           )}
           {isOwn && !message.isDeleted && (
             <span class="text-[10px] text-dark-400 dark:text-dark-500">
               {message.readAt ? (
-                <span class="text-primary-500">Read</span>
+                <span class="text-primary-500">read</span>
               ) : message.deliveredAt ? (
-                'Delivered'
+                'delivered'
               ) : (
-                'Sent'
+                'sent'
               )}
             </span>
           )}
@@ -214,7 +213,7 @@ export function MessageBubble({ message, isOwn, senderPublicKey, recipientPublic
         {showMenu && !message.isDeleted && (
           <>
             <div class="fixed inset-0 z-40" onClick={() => setShowMenu(false)} />
-            <div class="absolute right-full mr-2 top-0 z-50 w-36 bg-white dark:bg-dark-800 rounded-xl shadow-lg border border-dark-200 dark:border-dark-700 py-1">
+            <div class="absolute right-full mr-2 top-0 z-50 w-36 bg-white dark:bg-dark-800 rounded-xl shadow-lg border border-dark-200/60 dark:border-dark-700/60 py-1 animate-scale-in">
               {canEdit && (
                 <button
                   onClick={() => {
@@ -222,17 +221,17 @@ export function MessageBubble({ message, isOwn, senderPublicKey, recipientPublic
                     setIsEditing(true);
                     setShowMenu(false);
                   }}
-                  class="w-full px-3 py-2 text-left text-sm text-dark-700 dark:text-dark-200 hover:bg-dark-100 dark:hover:bg-dark-700 flex items-center gap-2 transition-colors"
+                  class="w-full px-3 py-2 text-left text-[13px] text-dark-700 dark:text-dark-200 hover:bg-dark-50 dark:hover:bg-dark-700 flex items-center gap-2 transition-colors"
                 >
-                  <div class="i-carbon-edit w-4 h-4" />
+                  <div class="i-carbon-edit w-3.5 h-3.5" />
                   Edit
                 </button>
               )}
               <button
                 onClick={handleDelete}
-                class="w-full px-3 py-2 text-left text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/10 flex items-center gap-2 transition-colors"
+                class="w-full px-3 py-2 text-left text-[13px] text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/20 flex items-center gap-2 transition-colors"
               >
-                <div class="i-carbon-trash-can w-4 h-4" />
+                <div class="i-carbon-trash-can w-3.5 h-3.5" />
                 Delete for Me
               </button>
             </div>

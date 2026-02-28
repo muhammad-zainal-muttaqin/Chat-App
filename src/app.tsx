@@ -28,15 +28,14 @@ export function App() {
   // Loading crypto
   if (!cryptoReady) {
     return (
-      <div class="min-h-screen flex items-center justify-center bg-white dark:bg-dark-950">
+      <div class="min-h-screen flex items-center justify-center app-shell-bg">
         <div class="text-center animate-fade-in">
-          <div class="relative w-20 h-20 mx-auto mb-6">
-            <div class="absolute inset-0 rounded-[2rem] bg-primary-500/10 blur-xl animate-pulse" />
-            <div class="relative w-20 h-20 rounded-[2rem] bg-gradient-to-br from-primary-500 to-primary-700 flex-center shadow-lg shadow-primary-500/20">
-              <span class="i-carbon-locked text-white text-3xl" />
-            </div>
+          <div class="w-14 h-14 rounded-2xl bg-primary-600 flex-center mx-auto mb-5 shadow-sm">
+            <span class="i-carbon-locked text-white text-2xl" />
           </div>
-          <div class="text-[11px] font-black uppercase tracking-[0.2em] text-primary-500">Initializing Security</div>
+          <div class="text-[10px] font-semibold uppercase tracking-[0.15em] text-primary-600 dark:text-primary-400 animate-breathe">
+            Initializing Security
+          </div>
         </div>
       </div>
     );
@@ -45,10 +44,12 @@ export function App() {
   // Loading auth state
   if (authLoading) {
     return (
-      <div class="min-h-screen flex items-center justify-center bg-white dark:bg-dark-950">
+      <div class="min-h-screen flex items-center justify-center app-shell-bg">
         <div class="flex flex-col items-center gap-4">
-          <div class="w-12 h-12 rounded-full border-4 border-primary-500/20 border-t-primary-500 animate-spin" />
-          <div class="text-[10px] font-bold uppercase tracking-widest text-dark-400">Verifying session...</div>
+          <div class="w-8 h-8 rounded-full border-2 border-primary-200 dark:border-primary-800 border-t-primary-600 dark:border-t-primary-400 animate-spin" />
+          <div class="text-[10px] font-medium uppercase tracking-widest text-dark-400 dark:text-dark-500">
+            Verifying session...
+          </div>
         </div>
       </div>
     );
@@ -62,10 +63,12 @@ export function App() {
   // Loading user data
   if (user === undefined) {
     return (
-      <div class="min-h-screen flex items-center justify-center bg-white dark:bg-dark-950">
+      <div class="min-h-screen flex items-center justify-center app-shell-bg">
         <div class="flex flex-col items-center gap-4">
-          <div class="w-12 h-12 rounded-full border-4 border-primary-500/20 border-t-primary-500 animate-spin" />
-          <div class="text-[10px] font-bold uppercase tracking-widest text-dark-400">Loading Profile...</div>
+          <div class="w-8 h-8 rounded-full border-2 border-primary-200 dark:border-primary-800 border-t-primary-600 dark:border-t-primary-400 animate-spin" />
+          <div class="text-[10px] font-medium uppercase tracking-widest text-dark-400 dark:text-dark-500">
+            Loading profile...
+          </div>
         </div>
       </div>
     );
