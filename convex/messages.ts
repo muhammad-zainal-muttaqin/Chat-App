@@ -60,7 +60,8 @@ export const send = mutation({
     conversationId: v.id('conversations'),
     ciphertext: v.string(), // Base64 encrypted message for recipient
     ciphertextSelf: v.optional(v.string()), // Base64 encrypted message for sender (self)
-    nonce: v.string(), // Base64 nonce
+    nonce: v.string(), // Base64 nonce for recipient
+    nonceSelf: v.optional(v.string()), // Base64 nonce for self (if different)
   },
   handler: async (ctx, args) => {
     const userId = await getCurrentUserId(ctx, args.token, args.deviceId);
@@ -86,6 +87,7 @@ export const send = mutation({
       ciphertext: args.ciphertext,
       ciphertextSelf: args.ciphertextSelf,
       nonce: args.nonce,
+      nonceSelf: args.nonceSelf,
       deletedForUserIds: [],
       isDeleted: false,
       editedAt: null,
@@ -118,6 +120,7 @@ export const edit = mutation({
     ciphertext: v.string(),
     ciphertextSelf: v.optional(v.string()),
     nonce: v.string(),
+    nonceSelf: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const userId = await getCurrentUserId(ctx, args.token, args.deviceId);
@@ -157,6 +160,7 @@ export const edit = mutation({
       ciphertext: args.ciphertext,
       ciphertextSelf: args.ciphertextSelf,
       nonce: args.nonce,
+      nonceSelf: args.nonceSelf,
       editedAt: Date.now(),
     });
 

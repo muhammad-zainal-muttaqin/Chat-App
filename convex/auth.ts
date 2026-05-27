@@ -9,8 +9,11 @@ function generateSalt(): string {
   return Array.from(array, b => b.toString(16).padStart(2, '0')).join('');
 }
 
-// Secure password hashing using PBKDF2 with 100,000 iterations
-async function hashPasswordWithSalt(password: string, salt: string): Promise<string> {
+// Secure password hashing using PBKDF2 (OWASP recommends 600,000 iterations for SHA-256)
+const CURRENT_ITERATIONS = 600000;
+const LEGACY_ITERATIONS = 100000;
+
+async function hashPasswordWithSalt(password: string, salt: string, iterations = CURRENT_ITERATIONS): Promise<string> {
   const encoder = new TextEncoder();
   const passwordBuffer = encoder.encode(password);
   const saltBuffer = encoder.encode(salt);
@@ -24,12 +27,12 @@ async function hashPasswordWithSalt(password: string, salt: string): Promise<str
     ['deriveBits']
   );
 
-  // Derive bits using PBKDF2 with 100,000 iterations
+  // Derive bits using PBKDF2
   const derivedBits = await crypto.subtle.deriveBits(
     {
       name: 'PBKDF2',
       salt: saltBuffer,
-      iterations: 100000,
+      iterations,
       hash: 'SHA-256',
     },
     keyMaterial,
@@ -159,8 +162,15 @@ export const login = mutation({
 
     if (user.passwordSalt) {
       // New secure format with unique salt (PBKDF2)
+      // Try current iteration count first (600k)
       const passwordHash = await hashPasswordWithSalt(args.password, user.passwordSalt);
       passwordValid = passwordHash === user.passwordHash;
+      if (!passwordValid) {
+        // Fallback: try legacy 100k iterations for users who haven't been upgraded yet
+        const legacyHash = await hashPasswordWithSalt(args.password, user.passwordSalt, LEGACY_ITERATIONS);
+        passwordValid = legacyHash === user.passwordHash;
+        needsUpgrade = passwordValid; // Re-hash with current iterations on success
+      }
     } else {
       // Legacy format for existing users (SHA-256 with static salt)
       const legacyHash = await hashPasswordLegacy(args.password);

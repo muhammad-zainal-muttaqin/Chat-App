@@ -2,7 +2,7 @@ import { useState, useMemo } from 'preact/hooks';
 import { useMutation } from 'convex/react';
 import { api } from '../../../convex/_generated/api';
 import { Id } from '../../../convex/_generated/dataModel';
-import { decryptMessage as decryptPayload, encryptMessage as encryptPayload } from '../../lib/crypto';
+import { decryptMessageAuto as decryptPayload, encryptPaddedMessage as encryptPayload } from '../../lib/crypto';
 import { useAuth } from '../../contexts/AuthContext';
 
 interface Message {
@@ -13,6 +13,7 @@ interface Message {
   ciphertext: string | null;
   ciphertextSelf?: string | null;
   nonce: string;
+  nonceSelf?: string;
   isDeleted: boolean;
   editedAt: number | null;
   deliveredAt: number | null;
@@ -54,7 +55,7 @@ export function MessageBubble({ message, isOwn, senderPublicKey, recipientPublic
           try {
             const decrypted = decryptPayload(
               message.ciphertextSelf,
-              message.nonce,
+              message.nonceSelf || message.nonce, // Use separate nonce if available, fallback to shared
               effectiveSenderPublicKey,
               keyPair.privateKey
             );
@@ -90,8 +91,7 @@ export function MessageBubble({ message, isOwn, senderPublicKey, recipientPublic
       encryptedForSelf = encryptPayload(
         editText.trim(),
         keyPair.publicKey,
-        keyPair.privateKey,
-        encryptedForRecipient.nonce
+        keyPair.privateKey
       );
     } catch (error) {
       console.error('Failed to encrypt edited message:', error);
@@ -106,6 +106,7 @@ export function MessageBubble({ message, isOwn, senderPublicKey, recipientPublic
         ciphertext: encryptedForRecipient.ciphertext,
         ciphertextSelf: encryptedForSelf.ciphertext,
         nonce: encryptedForRecipient.nonce,
+        nonceSelf: encryptedForSelf.nonce,
       });
       setIsEditing(false);
       setShowMenu(false);

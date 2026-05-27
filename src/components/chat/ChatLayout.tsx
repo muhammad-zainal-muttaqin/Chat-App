@@ -36,8 +36,7 @@ export function ChatLayout({ user }: ChatLayoutProps) {
         serverKey: user.publicKey.substring(0, 20) + '...',
         localKey: keyPair.publicKey.substring(0, 20) + '...',
       });
-      clearKeyPair();
-      logout();
+      clearKeyPair().then(() => logout());
     }
   }, [user?.publicKey, keyPair?.publicKey, token, logout]);
 

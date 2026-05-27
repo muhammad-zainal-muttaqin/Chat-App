@@ -146,116 +146,169 @@ export function decryptMessage(
   }
 }
 
-// Storage keys - use localStorage instead of sessionStorage for persistence
+// --- IndexedDB-backed encrypted key storage ---
+// Private keys are encrypted with a random AES-256-GCM key.
+// The wrapping key is stored as a CryptoKey object in IndexedDB,
+// which is origin-bound and not readable by JavaScript in other origins.
+const IDB_DB_NAME = 'privachat_keys';
+const IDB_STORE_NAME = 'keypair';
+const IDB_VERSION = 1;
+
+// Legacy localStorage keys (for migration cleanup)
 const PRIVATE_KEY_STORAGE_KEY = 'privacy_chat_private_key';
 const PUBLIC_KEY_STORAGE_KEY = 'privacy_chat_public_key';
 
-function canUseStorage(storage: Storage | undefined): storage is Storage {
-  if (!storage) return false;
+function openKeyDB(): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(IDB_DB_NAME, IDB_VERSION);
+    request.onupgradeneeded = () => {
+      const db = request.result;
+      if (!db.objectStoreNames.contains(IDB_STORE_NAME)) {
+        db.createObjectStore(IDB_STORE_NAME);
+      }
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+function idbGet(store: IDBObjectStore, key: IDBValidKey): Promise<unknown> {
+  return new Promise((resolve, reject) => {
+    const req = store.get(key);
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+function idbPut(store: IDBObjectStore, key: IDBValidKey, value: unknown): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const req = store.put(value, key);
+    req.onsuccess = () => resolve();
+    req.onerror = () => reject(req.error);
+  });
+}
+
+function idbClear(store: IDBObjectStore): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const req = store.clear();
+    req.onsuccess = () => resolve();
+    req.onerror = () => reject(req.error);
+  });
+}
+
+// One-time migration: remove old localStorage keys if they exist
+function cleanupLegacyStorage(): void {
   try {
-    const probeKey = '__privacy_chat_probe__';
-    storage.setItem(probeKey, '1');
-    storage.removeItem(probeKey);
-    return true;
+    const maybeLocalStorage = (globalThis as { localStorage?: Storage }).localStorage;
+    if (maybeLocalStorage) {
+      maybeLocalStorage.removeItem(PRIVATE_KEY_STORAGE_KEY);
+      maybeLocalStorage.removeItem(PUBLIC_KEY_STORAGE_KEY);
+    }
   } catch {
-    return false;
+    // Ignore storage access errors
   }
 }
 
-function getSessionStorageSafe(): Storage | undefined {
-  const maybeSessionStorage = (globalThis as { sessionStorage?: Storage }).sessionStorage;
-  return canUseStorage(maybeSessionStorage) ? maybeSessionStorage : undefined;
-}
-
-function getLocalStorageSafe(): Storage | undefined {
-  const maybeLocalStorage = (globalThis as { localStorage?: Storage }).localStorage;
-  return canUseStorage(maybeLocalStorage) ? maybeLocalStorage : undefined;
-}
-
-function getPreferredKeyStorage(): Storage | null {
-  return getSessionStorageSafe() ?? getLocalStorageSafe() ?? null;
-}
-
-// Store keys securely (using IndexedDB would be better in production)
-export function storeKeyPair(keyPair: KeyPair): void {
+// Store key pair in encrypted IndexedDB
+export async function storeKeyPair(keyPair: KeyPair): Promise<void> {
   assertByteLength(keyPair.privateKey, PRIVATE_KEY_LENGTH, 'Private key');
   if (!isKeyPairConsistent(keyPair.publicKey, keyPair.privateKey)) {
     throw new Error('Refusing to store inconsistent key pair');
   }
 
-  const storage = getPreferredKeyStorage();
-  if (!storage) {
-    throw new Error('No browser storage available for key persistence');
-  }
+  // Generate a random AES-256-GCM key for wrapping the private key
+  const wrappingKey = await crypto.subtle.generateKey(
+    { name: 'AES-GCM', length: 256 },
+    true,
+    ['encrypt', 'decrypt']
+  );
 
-  // Store private key as base64 (in production, use encrypted IndexedDB)
-  const privateKeyBase64 = encodeBase64(keyPair.privateKey);
-  storage.setItem(PRIVATE_KEY_STORAGE_KEY, privateKeyBase64);
-  storage.setItem(PUBLIC_KEY_STORAGE_KEY, keyPair.publicKey);
+  // Encrypt the private key bytes
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const encryptedPrivateKey = await crypto.subtle.encrypt(
+    { name: 'AES-GCM', iv },
+    wrappingKey,
+    keyPair.privateKey as unknown as BufferSource
+  );
 
-  // If we are using sessionStorage, clear old localStorage copies.
-  const localStorageSafe = getLocalStorageSafe();
-  if (localStorageSafe && storage !== localStorageSafe) {
-    localStorageSafe.removeItem(PRIVATE_KEY_STORAGE_KEY);
-    localStorageSafe.removeItem(PUBLIC_KEY_STORAGE_KEY);
-  }
+  const db = await openKeyDB();
+  const tx = db.transaction(IDB_STORE_NAME, 'readwrite');
+  const store = tx.objectStore(IDB_STORE_NAME);
+  await idbPut(store, 'publicKey', keyPair.publicKey);
+  await idbPut(store, 'encryptedPrivateBytes', new Uint8Array(encryptedPrivateKey));
+  await idbPut(store, 'wrappingKey', wrappingKey);
+  await idbPut(store, 'iv', iv);
+  await new Promise<void>((resolve, reject) => {
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+  db.close();
+
+  // Clean up any legacy localStorage keys
+  cleanupLegacyStorage();
 }
 
-// Load stored key pair
-export function loadKeyPair(): KeyPair | null {
-  const preferredStorage = getPreferredKeyStorage();
-  const fallbackLocalStorage = getLocalStorageSafe();
-
-  const privateKeyBase64 = preferredStorage?.getItem(PRIVATE_KEY_STORAGE_KEY) ?? null;
-  const publicKey = preferredStorage?.getItem(PUBLIC_KEY_STORAGE_KEY) ?? null;
-
-  let resolvedPrivateKey = privateKeyBase64;
-  let resolvedPublicKey = publicKey;
-
-  // Migration path: pull old keys from localStorage if preferred storage is sessionStorage.
-  if ((!resolvedPrivateKey || !resolvedPublicKey) && fallbackLocalStorage) {
-    resolvedPrivateKey = fallbackLocalStorage.getItem(PRIVATE_KEY_STORAGE_KEY);
-    resolvedPublicKey = fallbackLocalStorage.getItem(PUBLIC_KEY_STORAGE_KEY);
-    if (resolvedPrivateKey && resolvedPublicKey && preferredStorage && preferredStorage !== fallbackLocalStorage) {
-      preferredStorage.setItem(PRIVATE_KEY_STORAGE_KEY, resolvedPrivateKey);
-      preferredStorage.setItem(PUBLIC_KEY_STORAGE_KEY, resolvedPublicKey);
-      fallbackLocalStorage.removeItem(PRIVATE_KEY_STORAGE_KEY);
-      fallbackLocalStorage.removeItem(PUBLIC_KEY_STORAGE_KEY);
-    }
-  }
-
-  if (!resolvedPrivateKey || !resolvedPublicKey) return null;
+// Load key pair from encrypted IndexedDB
+export async function loadKeyPair(): Promise<KeyPair | null> {
+  // Clean up legacy localStorage keys on first access
+  cleanupLegacyStorage();
 
   try {
-    const privateKey = decodeBase64Strict(resolvedPrivateKey, 'Private key');
-    const decodedPublicKey = publicKeyFromBase64(resolvedPublicKey);
+    const db = await openKeyDB();
+    const tx = db.transaction(IDB_STORE_NAME, 'readonly');
+    const store = tx.objectStore(IDB_STORE_NAME);
 
+    const publicKey = (await idbGet(store, 'publicKey')) as string | null;
+    const encryptedPrivateBytes = (await idbGet(store, 'encryptedPrivateBytes')) as Uint8Array | null;
+    const wrappingKey = (await idbGet(store, 'wrappingKey')) as CryptoKey | null;
+    const iv = (await idbGet(store, 'iv')) as Uint8Array | null;
+
+    db.close();
+
+    if (!publicKey || !encryptedPrivateBytes || !wrappingKey || !iv) {
+      return null;
+    }
+
+    const privateKeyBytes = await crypto.subtle.decrypt(
+      { name: 'AES-GCM', iv: iv as unknown as BufferSource },
+      wrappingKey,
+      encryptedPrivateBytes as unknown as BufferSource
+    );
+
+    const privateKey = new Uint8Array(privateKeyBytes);
     assertByteLength(privateKey, PRIVATE_KEY_LENGTH, 'Private key');
-    assertByteLength(decodedPublicKey, PUBLIC_KEY_LENGTH, 'Public key');
+    publicKeyFromBase64(publicKey); // validates length
 
-    if (!isKeyPairConsistent(resolvedPublicKey, privateKey)) {
+    if (!isKeyPairConsistent(publicKey, privateKey)) {
       throw new Error('Stored key pair is inconsistent');
     }
 
-    return {
-      publicKey: resolvedPublicKey,
-      privateKey,
-    };
+    return { publicKey, privateKey };
   } catch (error) {
-    console.error('Invalid local key pair detected. Clearing corrupted keys.', error);
-    clearKeyPair();
+    console.error('Failed to load key pair from IndexedDB:', error);
+    await clearKeyPair(); // Clear corrupted data
     return null;
   }
 }
 
 // Clear stored keys (on logout)
-export function clearKeyPair(): void {
-  const sessionStorageSafe = getSessionStorageSafe();
-  const localStorageSafe = getLocalStorageSafe();
-  sessionStorageSafe?.removeItem(PRIVATE_KEY_STORAGE_KEY);
-  sessionStorageSafe?.removeItem(PUBLIC_KEY_STORAGE_KEY);
-  localStorageSafe?.removeItem(PRIVATE_KEY_STORAGE_KEY);
-  localStorageSafe?.removeItem(PUBLIC_KEY_STORAGE_KEY);
+export async function clearKeyPair(): Promise<void> {
+  // Also clean legacy localStorage
+  cleanupLegacyStorage();
+
+  try {
+    const db = await openKeyDB();
+    const tx = db.transaction(IDB_STORE_NAME, 'readwrite');
+    const store = tx.objectStore(IDB_STORE_NAME);
+    await idbClear(store);
+    await new Promise<void>((resolve, reject) => {
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+    db.close();
+  } catch {
+    // Ignore errors on cleanup
+  }
 }
 
 // Device ID for session binding (prevents session hijacking)
@@ -289,13 +342,135 @@ export function clearDeviceId(): void {
 }
 
 // Get or generate key pair
-export function getOrCreateKeyPair(): KeyPair {
-  const existing = loadKeyPair();
+export async function getOrCreateKeyPair(): Promise<KeyPair> {
+  const existing = await loadKeyPair();
   if (existing) return existing;
 
   const newKeyPair = generateKeyPair();
-  storeKeyPair(newKeyPair);
+  await storeKeyPair(newKeyPair);
   return newKeyPair;
+}
+
+// --- Safety numbers for key verification ---
+// Computes a deterministic safety number from two public keys.
+// Users can compare these out-of-band to verify each other's identity.
+export async function computeSafetyNumber(
+  publicKeyA: string,
+  publicKeyB: string
+): Promise<string> {
+  // Sort keys deterministically so both parties compute the same number
+  const sorted = [publicKeyA, publicKeyB].sort();
+  const keyA = decodeBase64Strict(sorted[0], 'Public key A');
+  const keyB = decodeBase64Strict(sorted[1], 'Public key B');
+
+  const combined = new Uint8Array(keyA.length + keyB.length);
+  combined.set(keyA, 0);
+  combined.set(keyB, keyA.length);
+
+  const hashBuffer = await crypto.subtle.digest('SHA-256', combined);
+  const hashArray = new Uint8Array(hashBuffer);
+
+  // Format as groups of 5 digits for easy verbal comparison
+  const numericHash = Array.from(hashArray)
+    .map(b => b.toString().padStart(3, '0'))
+    .join('');
+  return numericHash.slice(0, 30).replace(/(\d{5})/g, '$1 ').trim();
+}
+
+// --- Message padding (PKCS#7) to hide plaintext length from server ---
+const PADDING_BLOCK_SIZES = [256, 512, 1024, 2048];
+const MAX_MESSAGE_BYTES = 2048;
+
+function padMessage(message: Uint8Array): Uint8Array {
+  const len = message.length;
+  const targetSize = PADDING_BLOCK_SIZES.find(s => len < s) ?? MAX_MESSAGE_BYTES;
+  if (len > MAX_MESSAGE_BYTES) {
+    throw new Error(`Message too long: max ${MAX_MESSAGE_BYTES} bytes`);
+  }
+  const padLength = targetSize - len;
+  const padded = new Uint8Array(targetSize);
+  padded.set(message);
+  for (let i = len; i < targetSize; i++) {
+    padded[i] = padLength;
+  }
+  return padded;
+}
+
+function unpadMessage(padded: Uint8Array): Uint8Array {
+  if (padded.length === 0) throw new Error('Cannot unpad empty message');
+  const padLength = padded[padded.length - 1];
+  if (padLength === 0 || padLength > padded.length) throw new Error('Invalid padding');
+  for (let i = padded.length - padLength; i < padded.length; i++) {
+    if (padded[i] !== padLength) throw new Error('Invalid padding');
+  }
+  return padded.slice(0, padded.length - padLength);
+}
+
+// Encrypt with padding (hides message length)
+export function encryptPaddedMessage(
+  plaintext: string,
+  recipientPublicKey: string,
+  senderPrivateKey: Uint8Array,
+  providedNonce?: string
+): EncryptedMessage {
+  if (!plaintext) throw new Error('Cannot encrypt empty message');
+  assertByteLength(senderPrivateKey, PRIVATE_KEY_LENGTH, 'Sender private key');
+
+  const recipientPubKeyBytes = publicKeyFromBase64(recipientPublicKey);
+  const nonce = providedNonce
+    ? decodeBase64Strict(providedNonce, 'Nonce')
+    : nacl.randomBytes(NONCE_LENGTH);
+  assertByteLength(nonce, NONCE_LENGTH, 'Nonce');
+
+  const messageBytes = decodeUTF8(plaintext);
+  const paddedBytes = padMessage(messageBytes);
+
+  const ciphertext = nacl.box(paddedBytes, nonce, recipientPubKeyBytes, senderPrivateKey);
+  return {
+    ciphertext: encodeBase64(ciphertext),
+    nonce: encodeBase64(nonce),
+  };
+}
+
+// Decrypt with unpadding
+export function decryptPaddedMessage(
+  ciphertext: string,
+  nonce: string,
+  senderPublicKey: string,
+  recipientPrivateKey: Uint8Array
+): string {
+  try {
+    assertByteLength(recipientPrivateKey, PRIVATE_KEY_LENGTH, 'Recipient private key');
+    const ciphertextBytes = decodeBase64Strict(ciphertext, 'Ciphertext');
+    const nonceBytes = decodeBase64Strict(nonce, 'Nonce');
+    const senderPubKeyBytes = publicKeyFromBase64(senderPublicKey);
+    assertByteLength(nonceBytes, NONCE_LENGTH, 'Nonce');
+    if (ciphertextBytes.length < MIN_CIPHERTEXT_LENGTH) {
+      throw new Error('Ciphertext is too short');
+    }
+    const decrypted = nacl.box.open(ciphertextBytes, nonceBytes, senderPubKeyBytes, recipientPrivateKey);
+    if (!decrypted) throw new Error('Decryption failed - invalid ciphertext or wrong keys');
+    const unpadded = unpadMessage(decrypted);
+    return encodeUTF8(unpadded);
+  } catch (error) {
+    console.error('Decryption failed:', error);
+    throw new Error('Failed to decrypt message');
+  }
+}
+
+// Auto-decrypt: try padded first, fall back to unpadded (backward compat)
+export function decryptMessageAuto(
+  ciphertext: string,
+  nonce: string,
+  senderPublicKey: string,
+  recipientPrivateKey: Uint8Array
+): string {
+  try {
+    return decryptPaddedMessage(ciphertext, nonce, senderPublicKey, recipientPrivateKey);
+  } catch {
+    // Fallback: try without padding (legacy messages)
+    return decryptMessage(ciphertext, nonce, senderPublicKey, recipientPrivateKey);
+  }
 }
 
 // Derive a key from password using PBKDF2
@@ -308,7 +483,7 @@ async function deriveKeyFromPassword(password: string, salt: Uint8Array): Promis
   }
 
   const enc = new TextEncoder();
-  const passwordKey = await window.crypto.subtle.importKey(
+  const passwordKey = await crypto.subtle.importKey(
     'raw',
     enc.encode(password),
     { name: 'PBKDF2' },
@@ -316,11 +491,11 @@ async function deriveKeyFromPassword(password: string, salt: Uint8Array): Promis
     ['deriveKey']
   );
 
-  return window.crypto.subtle.deriveKey(
+  return crypto.subtle.deriveKey(
     {
       name: 'PBKDF2',
       salt: salt as unknown as BufferSource,
-      iterations: 100000,
+      iterations: 600000,
       hash: 'SHA-256',
     },
     passwordKey,
@@ -334,12 +509,12 @@ async function deriveKeyFromPassword(password: string, salt: Uint8Array): Promis
 export async function encryptPrivateKeyWithPassword(privateKey: Uint8Array, password: string): Promise<string> {
   assertByteLength(privateKey, PRIVATE_KEY_LENGTH, 'Private key');
 
-  const salt = window.crypto.getRandomValues(new Uint8Array(16));
-  const iv = window.crypto.getRandomValues(new Uint8Array(12));
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const iv = crypto.getRandomValues(new Uint8Array(12));
 
   const key = await deriveKeyFromPassword(password, salt);
 
-  const encrypted = await window.crypto.subtle.encrypt(
+  const encrypted = await crypto.subtle.encrypt(
     {
       name: 'AES-GCM',
       iv: iv,
@@ -372,7 +547,7 @@ export async function decryptPrivateKeyWithPassword(encryptedBase64: string, pas
 
     const key = await deriveKeyFromPassword(password, salt);
 
-    const decrypted = await window.crypto.subtle.decrypt(
+    const decrypted = await crypto.subtle.decrypt(
       {
         name: 'AES-GCM',
         iv: iv,

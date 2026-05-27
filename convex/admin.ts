@@ -8,8 +8,11 @@ function generateSalt(): string {
     return Array.from(array, b => b.toString(16).padStart(2, '0')).join('');
 }
 
-// Secure password hashing using PBKDF2 with 100,000 iterations
-async function hashPasswordWithSalt(password: string, salt: string): Promise<string> {
+// Secure password hashing using PBKDF2 (OWASP recommends 600,000 iterations for SHA-256)
+const CURRENT_ITERATIONS = 600000;
+const LEGACY_ITERATIONS = 100000;
+
+async function hashPasswordWithSalt(password: string, salt: string, iterations = CURRENT_ITERATIONS): Promise<string> {
     const encoder = new TextEncoder();
     const passwordBuffer = encoder.encode(password);
     const saltBuffer = encoder.encode(salt);
@@ -26,7 +29,7 @@ async function hashPasswordWithSalt(password: string, salt: string): Promise<str
         {
             name: 'PBKDF2',
             salt: saltBuffer,
-            iterations: 100000,
+            iterations,
             hash: 'SHA-256',
         },
         keyMaterial,
@@ -92,9 +95,14 @@ export const resetOwnPassword = mutation({
         let currentPasswordValid = false;
 
         if (user.passwordSalt) {
-            // New secure format
+            // New secure format - try current iterations first (600k)
             const currentHash = await hashPasswordWithSalt(args.currentPassword, user.passwordSalt);
             currentPasswordValid = currentHash === user.passwordHash;
+            if (!currentPasswordValid) {
+                // Fallback: try legacy 100k iterations
+                const legacyHash = await hashPasswordWithSalt(args.currentPassword, user.passwordSalt, LEGACY_ITERATIONS);
+                currentPasswordValid = legacyHash === user.passwordHash;
+            }
         } else {
             // Legacy format
             const legacyHash = await hashPasswordLegacy(args.currentPassword);

@@ -45,7 +45,8 @@ export default defineSchema({
     senderPublicKey: v.optional(v.string()), // Public key snapshot when message was encrypted
     ciphertext: v.union(v.string(), v.null()), // Encrypted for recipient
     ciphertextSelf: v.optional(v.union(v.string(), v.null())), // Encrypted for sender (self)
-    nonce: v.string(), // Shared nonce
+    nonce: v.string(), // Nonce for recipient ciphertext
+    nonceSelf: v.optional(v.string()), // Nonce for self ciphertext (separate from recipient nonce)
     deletedForUserIds: v.optional(v.array(v.id('users'))), // Local delete ("delete for me")
     isDeleted: v.boolean(),
     editedAt: v.union(v.number(), v.null()),

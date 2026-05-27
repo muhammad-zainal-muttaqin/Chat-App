@@ -15,23 +15,24 @@ export function useEncryption() {
 
   // Load key pair on mount
   useEffect(() => {
-    const stored = loadKeyPair();
-    if (stored) {
-      setKeyPair(stored);
-    }
+    loadKeyPair().then((stored) => {
+      if (stored) {
+        setKeyPair(stored);
+      }
+    });
   }, []);
 
   // Generate and store new key pair
-  const generateKeys = useCallback(() => {
+  const generateKeys = useCallback(async () => {
     const newKeyPair = generateKeyPair();
-    storeKeyPair(newKeyPair);
+    await storeKeyPair(newKeyPair);
     setKeyPair(newKeyPair);
     return newKeyPair;
   }, []);
 
   // Clear keys on logout
-  const clearKeys = useCallback(() => {
-    clearKeyPair();
+  const clearKeys = useCallback(async () => {
+    await clearKeyPair();
     setKeyPair(null);
   }, []);
 

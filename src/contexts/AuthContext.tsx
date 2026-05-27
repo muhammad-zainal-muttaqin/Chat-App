@@ -102,25 +102,28 @@ export function AuthProvider({ children }: { children: preact.ComponentChildren 
 
   // Load token and keys on mount
   useEffect(() => {
-    const currentDeviceId = getOrCreateDeviceId();
-    setDeviceId(currentDeviceId);
+    const init = async () => {
+      const currentDeviceId = getOrCreateDeviceId();
+      setDeviceId(currentDeviceId);
 
-    const storedToken = readStoredToken();
-    const storedKeyPair = loadKeyPair();
+      const storedToken = readStoredToken();
+      const storedKeyPair = await loadKeyPair();
 
-    // Never keep an auth session without a valid encryption key pair.
-    // Force re-login so keys can be restored from encrypted server backup.
-    if (storedToken && !storedKeyPair) {
-      console.warn('Session token found without valid encryption keys. Forcing re-authentication.');
-      clearStoredToken();
-    } else if (storedToken) {
-      setToken(storedToken);
-    }
-    if (storedKeyPair) {
-      setKeyPair(storedKeyPair);
-    }
+      // Never keep an auth session without a valid encryption key pair.
+      // Force re-login so keys can be restored from encrypted server backup.
+      if (storedToken && !storedKeyPair) {
+        console.warn('Session token found without valid encryption keys. Forcing re-authentication.');
+        clearStoredToken();
+      } else if (storedToken) {
+        setToken(storedToken);
+      }
+      if (storedKeyPair) {
+        setKeyPair(storedKeyPair);
+      }
 
-    setIsLoading(false);
+      setIsLoading(false);
+    };
+    init();
   }, []);
 
   const register = useCallback(
@@ -147,7 +150,7 @@ export function AuthProvider({ children }: { children: preact.ComponentChildren 
 
         // Store token and keys
         writeStoredToken(result.token);
-        storeKeyPair(newKeyPair);
+        await storeKeyPair(newKeyPair);
 
         setToken(result.token);
         setKeyPair(newKeyPair);
@@ -199,7 +202,7 @@ export function AuthProvider({ children }: { children: preact.ComponentChildren 
               privateKey,
             };
             // IMPORTANT: Overwrite localStorage with server keys (server is source of truth)
-            storeKeyPair(currentKeyPair);
+            await storeKeyPair(currentKeyPair);
             console.log('Keys restored from server successfully');
           } catch (e) {
             console.error('Failed to decrypt keys from server:', e);
@@ -208,7 +211,7 @@ export function AuthProvider({ children }: { children: preact.ComponentChildren 
             if (forceGenerateNewKeys) {
               console.warn('User requested new key generation - old messages will be unreadable');
               currentKeyPair = generateKeyPair();
-              storeKeyPair(currentKeyPair);
+              await storeKeyPair(currentKeyPair);
               warning = 'new_keys_generated';
 
               // Backup new keys to server
@@ -237,8 +240,8 @@ export function AuthProvider({ children }: { children: preact.ComponentChildren 
 
         // STEP 2: Server has NO keys (new user or keys were never backed up)
         if (!currentKeyPair && !authResponse.encryptedPrivateKey) {
-          // Check localStorage as potential recovery (only if server has no keys)
-          const localKeys = loadKeyPair();
+          // Check IndexedDB as potential recovery (only if server has no keys)
+          const localKeys = await loadKeyPair();
           const serverPublicKey = authResponse.publicKey;
           const localMatchesServer = Boolean(
             localKeys &&
@@ -270,13 +273,13 @@ export function AuthProvider({ children }: { children: preact.ComponentChildren 
           } else {
             if (localKeys && !localMatchesServer) {
               console.warn('Ignoring local keys because they do not match server public key');
-              clearKeyPair();
+              await clearKeyPair();
             }
 
             // No keys anywhere - generate new ones with WARNING
             console.warn('No encryption keys found anywhere - generating new keys');
             currentKeyPair = generateKeyPair();
-            storeKeyPair(currentKeyPair);
+            await storeKeyPair(currentKeyPair);
             warning = 'new_keys_generated';
 
             // Backup new keys to server
@@ -335,7 +338,7 @@ export function AuthProvider({ children }: { children: preact.ComponentChildren 
 
     // Clear storage
     clearStoredToken();
-    clearKeyPair();
+    await clearKeyPair();
 
     setToken(null);
     setKeyPair(null);

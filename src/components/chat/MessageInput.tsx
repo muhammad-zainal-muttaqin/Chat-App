@@ -2,7 +2,7 @@ import { useState } from 'preact/hooks';
 import { useMutation } from 'convex/react';
 import { api } from '../../../convex/_generated/api';
 import { Id } from '../../../convex/_generated/dataModel';
-import { encryptMessage as encryptPayload } from '../../lib/crypto';
+import { encryptPaddedMessage as encryptPayload } from '../../lib/crypto';
 import { useAuth } from '../../contexts/AuthContext';
 
 interface MessageInputProps {
@@ -32,11 +32,11 @@ export function MessageInput({ conversationId, recipientPublicKey, token, device
     let encryptedForSelf;
     try {
       encryptedForRecipient = encryptPayload(text, recipientPublicKey, keyPair.privateKey);
+      // Generate separate nonce for self-encryption (defense in depth)
       encryptedForSelf = encryptPayload(
         text,
         keyPair.publicKey,
-        keyPair.privateKey,
-        encryptedForRecipient.nonce
+        keyPair.privateKey
       );
     } catch (error) {
       console.error('Failed to encrypt message payload:', error);
@@ -54,6 +54,7 @@ export function MessageInput({ conversationId, recipientPublicKey, token, device
         ciphertext: encryptedForRecipient.ciphertext,
         ciphertextSelf: encryptedForSelf.ciphertext,
         nonce: encryptedForRecipient.nonce,
+        nonceSelf: encryptedForSelf.nonce,
       });
 
       if (onMessageSent && result.messageId) {
